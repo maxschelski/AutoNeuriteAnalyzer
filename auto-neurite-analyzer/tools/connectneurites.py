@@ -34,9 +34,6 @@ class connectNeurites():
         labeledIslands,nbLabels = ndimage.label(islands,structure=[[1,1,1],[1,1,1],[1,1,1]])
         
         
-#        plt.figure()
-#        plt.imshow(labeledIslands)
-        
         #define points of surrounding of neuronal cellBody
         #go through each label and connect
         connections = np.zeros_like(img)
@@ -87,7 +84,6 @@ class connectNeurites():
                 
                 #go through up to 6 points, to check if there is one point that can lead to a successfull connection
                 targetFound = False
-#                print("-----------------NEW ISLAND---------------")
                 for a in range(0,6):
                     islandBorderMaxVal = np.max(imgForBorder[islandBorderData[0],islandBorderData[1]])
                     
@@ -162,7 +158,7 @@ class connectNeurites():
                                 #either the contrast of the whole connection or the local contrast is above set threshold value
                                 contrast = connectNeurites.getContrastOfConnection(sortedArray,start,len(sortedArray)-5,img_forContrast[(islands != 1) & (img != 0)],img_forContrast)
                                 connectPoints = contrast > minContrast
-    #                                    print("contrast: {}".format(contrast))
+                                
                                 if connectPoints:
                                     img_forContrast = img_forContrast - backgroundVal * 0.9
                                     start = len(sortedArray)-15
@@ -170,9 +166,7 @@ class connectNeurites():
                                         start = 0
                                     localContrast = connectNeurites.getContrastOfConnection(sortedArray,start,len(sortedArray)-5,img[currentPoint[0],currentPoint[1]],img_forContrast)
                                     connectPoints = localContrast > 1/maxLocalConnectionContrast
-    #                                        print("contrast: {} / localcontrast: {}".format(contrast,localContrast))
                             if connectPoints:
-    #                                    print("CONNECTED!")
                                 targetFound = True
                                 #islands needed to be dilated before intensity based connection is drawn
                                 #therefore, draw connection line from non dilated island to beginning of intensity based connection

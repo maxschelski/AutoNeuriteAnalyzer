@@ -33,7 +33,8 @@ class ThresholdNeuron:
     @staticmethod
     def start(img,cX,cY,grainSizeToRemove,dilationForOverlap,overlapMultiplicator,neuron,minEdgeVal,minBranchSize,percentileChangeForThreshold, maxThresholdChange,minSomaOverflow,somaExtractionFilterSize,maxToleratedSomaOverflowRatio,nb1Dbins,minNbOfPxPerLabel,objectSizeToRemoveForSomaExtraction,distanceToCover,filterBackgroundPointsFactor,openingForThresholdEdge,medianForThresholdEdge,closingForPresoma,mask=np.zeros([10,10]),starting_threshold=0):
 
-        #higher dilation than normaly, since neurite path can fluctuate during thresholding a lot 
+        #higher dilation than normaly, 
+        #since neurite path can fluctuate during thresholding a lot 
 #        dilationForOverlap = dilationForOverlap * 2
 #        overlapMultiplicator = overlapMultiplicator * 2
         
@@ -52,14 +53,13 @@ class ThresholdNeuron:
             Ints = img[img >0].ravel()
             sortedInts = np.sort(Ints)
             
-            img_for_threshold_edge = ThresholdNeuron.getEdgeImage(img,openingForThresholdEdge,medianForThresholdEdge)
+            img_for_threshold_edge = ThresholdNeuron.getEdgeImage(img,
+                                                                  openingForThresholdEdge,
+                                                                  medianForThresholdEdge)
     
             #threshold edge image using histogram based thresholding
             sortedInts = np.sort(img_for_threshold_edge.ravel())
             MAX = np.max(sortedInts[0:int(np.round(len(sortedInts)*0.999,0))])
-    #        numOfBins = MAX / (minEdgeVal)
-    #        maxNbOfBins = len(sortedInts[sortedInts > 0.1]) / avPxPerEdgeBin
-    #        MIN = sortedInts[sortedInts > 0][int(np.round(len(sortedInts[sortedInts > 0])*0.01,0))]
             allBins = np.logspace(np.log10(0.1),np.log10(MAX),num=25)
             edgeThresh = otsu(img_for_threshold_edge)
             
@@ -67,6 +67,7 @@ class ThresholdNeuron:
             if len(np.where(mask > 0)[0]) > 0:
                 #DOES THE MASK WORK IN THE CURRENT SYSTEM?
                 img[mask == True] = 0
+                
             #check if any threshold was found, if not don't continue
             if np.isnan(edgeThresh):
                 print("edge threshold didnt work...")
@@ -90,15 +91,6 @@ class ThresholdNeuron:
                     img_filtered = img
                 else:
                     Ints = img[img >0].ravel()
-                    
-                    #just a marker to see in images approximately which cell number it belongs to
-    #                neuronNb = int(neuron.replace("cell",""))
-    #                counter = 0
-    #                for a in range(0,neuronNb):
-    #                    counter += 1
-    #                    if counter == 5:
-    #                        plt.figure()
-    #                        counter = 0
         
                     img_threshold, percentile, thresholdVal, cX, cY, Ints, sortedInts = ThresholdNeuron.getThresholdBasedOnSomaEdge(img,img_edges,minSomaOverflow,somaExtractionFilterSize,objectSizeToRemoveForSomaExtraction,maxToleratedSomaOverflowRatio,closingForPresoma)
                     if np.isnan(thresholdVal):
@@ -109,16 +101,6 @@ class ThresholdNeuron:
                     #changed last parameter from imgOfWholeNeuron to img_threshold
                     nbOfLabels,nbPixHoles,lastImg,thresholdVal = ThresholdNeuron.evalThreshold(img,Ints,sortedInts,percentile,grainSizeToRemove,img_threshold)
                    
-#                    nbPxInThresh = len(np.where(lastImg == 1)[0])
-#                    averageNbOfPxPerLabel = nbPxInThresh/nbOfLabels
-                    #check if the thresholding worked - if there are not many small unconnected thresholded areas, 
-                    #this indicates that thresholding did not work (small nb of px per label)
-#                    if averageNbOfPxPerLabel < minNbOfPxPerLabel:
-#                        print("no cell in field of view")
-#                        img_filtered = img
-#                        thresholdVal = np.nan
-#                        cX = np.nan
-#                    else:
 #    
                         #define one soma area that will not be included in skeleton analysis
                     soma,cX,cY,lastImg_clean = ThresholdNeuron.getSomaFromThresholdedImage(lastImg,minSomaOverflow,somaExtractionFilterSize,cX,cY,objectSizeToRemoveForSomaExtraction,closingForPresoma)
@@ -348,9 +330,7 @@ class ThresholdNeuron:
         img_for_threshold = copy.copy(img)
 #        start = generalTools.microseconds()
         while continueRefiningThreshold:
-#            print(generalTools.microseconds()-start)
-#            start = generalTools.microseconds()
-#            print("percentile: {}".format(percentile))
+            
             if sizeRatio > 10:
                 percentile = percentile * 0.4
             elif sizeRatio > 4:
@@ -370,10 +350,8 @@ class ThresholdNeuron:
             thresholdVal = ThresholdNeuron.getValueOfPercentile(sortedInts,percentile)
 #                thresholdVal, percentile, best,img_for_threshold = self.thresholdByNormDistr(percentile,Ints,img_for_threshold,img,thresholdVal)
 
-#                Ints = img_for_threshold.ravel()
             if ~np.isnan(thresholdVal):
-#                    allBests.append(best)
-#                    allPercentiles.append(lastPercentile-percentile)
+                
                 img_threshold = img > thresholdVal
                 soma,cX,cY, img_threshold = ThresholdNeuron.getSomaFromThresholdedImage(img_threshold,minSomaOverflow,somaExtractionFilterSize,np.nan,np.nan,objectSizeToRemoveForSomaExtraction,closingForPresoma)
                 
@@ -385,13 +363,8 @@ class ThresholdNeuron:
                     somaBorder = np.zeros_like(soma)
                     somaBorder[(soma == 1) & (somaEroded == 0)] = 1
                     somaBorder = morph.skeletonize(somaBorder)
-#                    somaReduction = morph.binary_dilation(somaReduction,disk(1))
-#                    print(len(np.where(somaBorder == 1)[0]))
+                    
                     somaDifference = np.subtract(img_edges,somaBorder)
-#                    plt.figure()
-#                    plt.figure()
-#                    plt.figure()
-#                    plt.imshow(img_threshold)
                     sizeRatio = len(np.where(soma == 1)[0]) / len(np.where(img_edges == 1)[0])
                     somaOverflowRatio = len(np.where(somaDifference == -1)[0])/len(np.where(somaBorder == 1)[0])
                     
@@ -425,7 +398,6 @@ class ThresholdNeuron:
         soma = soma.astype(bool)
         thresholdVal = 0
         while (optimalThresh == False) & (iteration < 30):
-#            print("iteration:{} / optimal? {} / percentile: {}".format(iteration,optimalThresh,percentile,thresholdVal))
             #in first iteration, thresholded image was already generated
             if firstIteration:
                 firstIteration = False
@@ -456,22 +428,15 @@ class ThresholdNeuron:
                         lastImg_skel_test[soma] = False
                         lastImg_skel_test = morph.remove_small_objects(lastImg_skel_test,minBranchSize,connectivity=2)
                         lastImg_skel_test = ndimage.binary_dilation(lastImg_skel_test,disk(dilationForOverlap/overlapMultiplicator),iterations=overlapMultiplicator)
-#                                        plt.figure()
-                        
-#                                        plt.figure()
-#                                        plt.imshow(lastImg_copy_test)
-#                                        plt.figure()
-#                                        plt.imshow(lastImg_skel_test)
+
+
                         if len(np.where(lastImg_skel_test)[0]) > 0:
                             diffOfImgs,overlapOfImgs = generalTools.overlapImgs(lastImg_skel,lastImg_skel_test,dilationForOverlap,overlapMultiplicator,1,0)
-    #                                    plt.figure()
-    #                                    plt.imshow(diffOfImgs)
                             diffOfImgs = morph.remove_small_objects(diffOfImgs,minBranchSize/8,connectivity=2)
                             difference = len(np.where(diffOfImgs > 0)[0])
                         else:
                             difference = minBranchSize
                     pxOpening -= 1
-#                            print("opening:{}".format(pxOpening))
                 lastImg_copy = ndimage.morphology.binary_opening(lastImg,morph.disk(pxOpening))
                 #smoothen image a lot to skeletonize
             lastImg_copy = ndimage.morphology.binary_closing(lastImg_copy,disk(int(np.round(minBranchSize/8,0))))
@@ -482,9 +447,7 @@ class ThresholdNeuron:
             
 #                        lastImg_skel = morph.remove_small_objects(lastImg_skel,self.minBranchSize,connectivity=2)
             lastImg_skel_labeled = measure.label(lastImg_skel)
-#                            plt.figure()
-#                            plt.imshow(morph.dilation(lastImg_skel_labeled,disk(3)))
-#                        print(len(np.unique(lastImg_skel_labeled)))
+
             for label in np.unique(lastImg_skel_labeled):
                 if label != 0:
                     allCoords = np.where(lastImg_skel_labeled == label)
@@ -498,43 +461,14 @@ class ThresholdNeuron:
             lastImg_skel_dil = ndimage.binary_dilation(lastImg_skel,disk(dilationForOverlap/overlapMultiplicator),iterations=overlapMultiplicator)
             
             lastImg_skel_dil[soma] = True
-#                        plt.figure()
-#                        plt.imshow(lastImg_skel_dil)
+
             
             if iteration == 1:
                 firstImg_skel_dil = lastImg_skel_dil
             diffOfImgs,overlapOfImgs = generalTools.overlapImgs(firstImg_skel_dil,lastImg_skel_dil,dilationForOverlap,overlapMultiplicator,1,1)
-#                    plt.figure()
-#                    plt.figure()
-#                    plt.figure()
-#                            plt.figure()
-#                            plt.figure()
-#                    plt.imshow(morph.binary_dilation(diffOfImgs[0],disk(3)))
-#                    diffOfImgs[0] = morph.remove_small_objects(diffOfImgs[0],grainSizeToRemove,connectivity=3)
-#                    plt.figure()
-#                    plt.imshow(morph.binary_dilation(diffOfImgs[0],disk(3)))
-#                    diffOfImgs[1] = morph.remove_small_objects(diffOfImgs[1],grainSizeToRemove,connectivity=3)
-#                            plt.figure()
-#                            plt.imshow(lastImg)
-#                            plt.figure()
-#                            plt.imshow(lastImg_copy)
-#                            plt.figure()
-#                            plt.imshow(lastImg_skel)
-#                            plt.figure()
-#                            plt.imshow(firstImg_skel_dil)
-#                            plt.figure()
-#                            plt.imshow(lastImg_skel_dil)
-#                            diffOfImgsTest = morph.dilation(diffOfImgs[0],disk(3))
-#                            lastImg_skel_dil[diffOfImgsTest] = True
-#                            plt.figure()
-#                            plt.imshow(lastImg_skel_dil)
-#                            plt.figure()
-#                            plt.imshow(morph.dilation(diffOfImgs[0],disk(3)))
-#                            plt.figure()
-#                            plt.imshow(morph.dilation(diffOfImgs[1],disk(3)))
+
             realDiff = len(np.where(diffOfImgs[0] == 1)[0])-len(np.where(diffOfImgs[1] == 1)[0])
-#                            print("real difference: {}".format(realDiff))
-#                print(nbOfLabels)
+
             if (realDiff >= (maxThresholdChange)):
                 optimalThresh = True
                 finalThresholdVal = percentile/percentileChangeForThreshold

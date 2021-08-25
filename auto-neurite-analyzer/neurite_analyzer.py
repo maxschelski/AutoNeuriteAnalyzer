@@ -385,59 +385,75 @@ class NeuriteAnalyzer():
                 if len(relevant_csv_files) > 0:
                     self.allNeurites = pd.read_csv(relevant_csv_files[0])
                     self.baseFileName = relevant_csv_files[0].replace(".csv","")
-                    # print(path, self.baseFileName)
     #                self.allNeurites.y = self.allNeurites.y.astype(list)
             self.allNeurites = self.createSkeleton(path)
-            # ("gain_x" in self.allNeurites.columns)
-            if self.doAnalysis :
-                if os.path.exists(self.baseFileName+".csv"):
-                    self.allNeurites = pd.read_csv(self.baseFileName+".csv")
-                if len(self.allNeurites) > 0:
-                    self.allNeurites = self.convert_columns_from_string(self.allNeurites)
-                    clean_dataframe = True
-                    save_skeletons = True
-                    if os.path.exists(self.baseFileName+"_corr.csv"):
-                        all_neurites_corr = pd.read_csv(self.baseFileName+"_corr.csv")
-                        if all_neurites_corr['time'].max() == self.allNeurites['time'].max():
-                            if (not self.always_re_clean_dataframes) & (not self.always_clean_dataframe):
-                                clean_dataframe = False
-                            if (not self.always_save_completed_skeletons) & (not self.always_save_skeletons):
-                                save_skeletons = False
+            if os.path.exists(self.baseFileName+".csv"):
+                self.allNeurites = pd.read_csv(self.baseFileName+".csv")
+            if (self.doAnalysis) & (len(self.allNeurites) > 0):
+                self.allNeurites = self.convert_columns_from_string(self.allNeurites)
+                clean_dataframe = True
+                save_skeletons = True
+                if os.path.exists(self.baseFileName+"_corr.csv"):
+                    all_neurites_corr = pd.read_csv(self.baseFileName+"_corr.csv")
+                    if all_neurites_corr['time'].max() == self.allNeurites['time'].max():
+                        if (not self.always_re_clean_dataframes) & (not self.always_clean_dataframe):
+                            clean_dataframe = False
+                        if (not self.always_save_completed_skeletons) & (not self.always_save_skeletons):
+                            save_skeletons = False
+                    else:
+                        if (not self.always_re_clean_dataframes) & (not self.always_clean_dataframe):
+                            clean_dataframe = False
+                        if (not self.always_save_completed_skeletons) & (not self.always_save_skeletons):
+                            save_skeletons = False
+                if (not self.all_timepoints_analyzed) & (not self.continue_with_incomplete_analysis):
+                    clean_dataframe = False
+                    save_skeletons = False
+                if clean_dataframe:
+                    self.allNeurites = DataframeCleanup.remove_double_branches_from_all_neurites(self.allNeurites)
+                    self.allNeurites = DataframeCleanup.removeNonContinuousOrigins(self.allNeurites,
+                                                                                   self.maxGapSize,
+                                                                                   self.min_nb_of_timeframes_factor)
+#                    self.allNeurites = DataframeCleanup.adjustStartPoints(self.allNeurites,self.radius_of_start_points ,self.min_fraction_of_start_points_closeby)
+                    self.allNeurites.to_csv(self.baseFileName+"_corr.csv")
+                continue_analysis = False
+                if os.path.exists(self.baseFileName+"_corr.csv"):
+                    self.allNeurites = pd.read_csv(self.baseFileName+"_corr.csv")
+                    if len(self.allNeurites) > 0:
+                        continue_analysis = True
+                if continue_analysis:
+                    if save_skeletons:
+                        self.saveSkeletons(self.allNeurites,path,
+                                           self.date,
+                                           self.experiment,
+                                           self.neuron,
+                                           self.image_shape)
+                    self.allNeurites = pd.read_csv(self.baseFileName+"_corr.csv")
+                    if self.analyze_intensities:
+                        self.allNeurites.date = self.allNeurites.date.astype(str)
+                        if not os.path.exists(self.baseFileName+"_corr_int.csv"):
+                            self.allNeurites = Analyzers.analyzeIntensities(self.date,
+                                                                            self.experiment,
+                                                                            self.neuron,path,
+                                                                            self.allNeurites,
+                                                                            self.channelUsedForSkel,
+                                                                            self.channelsToAnalyze,
+                                                                            self.allNeuritesColumns,
+                                                                            self.minNeuriteLength
+                                                                            ,self.AW_maxIntFac)
+                            self.allNeurites.to_csv(self.baseFileName+"_corr_int.csv")
                         else:
-                            if (not self.always_re_clean_dataframes) & (not self.always_clean_dataframe):
-                                clean_dataframe = False
-                            if (not self.always_save_completed_skeletons) & (not self.always_save_skeletons):
-                                save_skeletons = False
-                    if (not self.all_timepoints_analyzed) & (not self.continue_with_incomplete_analysis):
-                        clean_dataframe = False
-                        save_skeletons = False
-                    if clean_dataframe:
-                        self.allNeurites = DataframeCleanup.remove_double_branches_from_all_neurites(self.allNeurites)
-                        self.allNeurites = DataframeCleanup.removeNonContinuousOrigins(self.allNeurites,self.maxGapSize,self.min_nb_of_timeframes_factor)
-    #                    self.allNeurites = DataframeCleanup.adjustStartPoints(self.allNeurites,self.radius_of_start_points ,self.min_fraction_of_start_points_closeby)
-                        self.allNeurites.to_csv(self.baseFileName+"_corr.csv")
-                    if os.path.exists(self.baseFileName+"_corr.csv"):
-                        self.allNeurites = pd.read_csv(self.baseFileName+"_corr.csv")
-                        if len(self.allNeurites) > 0:
-                            if save_skeletons:
-                                self.saveSkeletons(self.allNeurites,path,self.date,self.experiment,self.neuron,self.image_shape)
-                            self.allNeurites = pd.read_csv(self.baseFileName+"_corr.csv")
-                            if self.analyze_intensities:
-                                self.allNeurites.date = self.allNeurites.date.astype(str)
-                                if not os.path.exists(self.baseFileName+"_corr_int.csv"):
-                                    self.allNeurites = Analyzers.analyzeIntensities(self.date,self.experiment,self.neuron,path,self.allNeurites,self.channelUsedForSkel,self.channelsToAnalyze,self.allNeuritesColumns,self.minNeuriteLength,self.AW_maxIntFac)
-                                    self.allNeurites.to_csv(self.baseFileName+"_corr_int.csv")
-                                else:
-                                    print("Thread {} - {} - {}: Intensities were analyzed already.".format(self.thread, self.date, self.neuron))
-                                #commented out since not working properly yet.
-        #                        self.allNeurites = pd.read_csv(self.baseFileName+"_corr_int.csv")
-        #                        self.allNeurites = Analyzers.analyzeGrowth(self.date,self.experiment,self.neuron,path,self.allNeurites,self.allNeuritesColumns,self.minChangeInNeuriteLength)
-        #                        self.allNeurites.to_csv(self.baseFileName+"_corr_int.csv")
-        #                    self.allNeurites = pd.read_csv(self.baseFileName+"_corr_int.csv")
-        #                    self.allNeurites.date = self.allNeurites.date.astype(str)
-        #                    self.allNeurites = Analyzer.analyzeActinWaves(self.allNeurites)
-        #                    self.allNeurites.to_csv(self.baseFileName+"_corr_int_AW.csv")
-    #                self.allNeurites = self.allNeurites.reset_index().set_index(['date','experiment','neuron','channel','origin','branch','time']).sort_index()
+                            print("Thread {} - {} - {}: Intensities were analyzed already.".format(self.thread, 
+                                                                                                   self.date, 
+                                                                                                   self.neuron))
+                        #commented out since not working properly yet.
+#                        self.allNeurites = pd.read_csv(self.baseFileName+"_corr_int.csv")
+#                        self.allNeurites = Analyzers.analyzeGrowth(self.date,self.experiment,self.neuron,path,self.allNeurites,self.allNeuritesColumns,self.minChangeInNeuriteLength)
+#                        self.allNeurites.to_csv(self.baseFileName+"_corr_int.csv")
+#                    self.allNeurites = pd.read_csv(self.baseFileName+"_corr_int.csv")
+#                    self.allNeurites.date = self.allNeurites.date.astype(str)
+#                    self.allNeurites = Analyzer.analyzeActinWaves(self.allNeurites)
+#                    self.allNeurites.to_csv(self.baseFileName+"_corr_int_AW.csv")
+#                self.allNeurites = self.allNeurites.reset_index().set_index(['date','experiment','neuron','channel','origin','branch','time']).sort_index()
 
     def convert_columns_from_string(self,all_neurites):
         all_neurites.date = all_neurites.date.astype(str)
@@ -677,7 +693,33 @@ class NeuriteAnalyzer():
             self.timeframe = timeframe
 
 
-            timeframe_neurites, self.optimalThreshold, self.threshold_percentile,self.backgroundVal, self.cX,self.cY = ThresholdNeuron.start(timeframe,self.cX,self.cY,self.grainSizeToRemove,self.dilationForOverlap,self.overlapMultiplicator,self.neuron,self.minEdgeVal,self.minBranchSize,self.percentileChangeForThreshold, self.maxThresholdChange,self.minSomaOverflow,self.somaExtractionFilterSize,self.maxToleratedSomaOverflowRatio,self.nb1Dbins,self.minNbOfPxPerLabel,self.objectSizeToRemoveForSomaExtraction,self.distanceToCover,self.filterBackgroundPointsFactor,self.openingForThresholdEdge,self.medianForThresholdEdge,self.closingForPresoma,maskImData_thresh,starting_threshold)
+            output = ThresholdNeuron.start(timeframe,self.cX,self.cY,
+                                           self.grainSizeToRemove,
+                                           self.dilationForOverlap,
+                                           self.overlapMultiplicator,
+                                           self.neuron,self.minEdgeVal,
+                                           self.minBranchSize,
+                                           self.percentileChangeForThreshold, 
+                                           self.maxThresholdChange,
+                                           self.minSomaOverflow,
+                                           self.somaExtractionFilterSize,
+                                           self.maxToleratedSomaOverflowRatio,
+                                           self.nb1Dbins,
+                                           self.minNbOfPxPerLabel,
+                                           self.objectSizeToRemoveForSomaExtraction,
+                                           self.distanceToCover,
+                                           self.filterBackgroundPointsFactor,
+                                           self.openingForThresholdEdge,
+                                           self.medianForThresholdEdge,
+                                           self.closingForPresoma,
+                                           maskImData_thresh,
+                                           starting_threshold)
+                    
+            (timeframe_neurites, 
+             self.optimalThreshold, 
+             self.threshold_percentile,
+             self.backgroundVal, 
+             self.cX,self.cY) = output
 
             if ~np.isnan(self.optimalThreshold):
                 
@@ -687,12 +729,19 @@ class NeuriteAnalyzer():
                 timeframe_invMask = timeframe_neurites.astype(np.uint8)
                 timeframe_invMask[timeframe_invMask > 0] = 255
                 nbOfLabels = 2
-                timeframe_soma, timeframe_neurites = SomaTools.getSoma(timeframe_invMask,self.minSomaOverflow,self.somaExtractionFilterSize,self.cX,self.cY,timeframe_neurites,self.objectSizeToRemoveForSomaExtraction)
+                #extract soma and threshold image
+                timeframe_soma, timeframe_neurites = SomaTools.getSoma(timeframe_invMask,
+                                                                       self.minSomaOverflow,
+                                                                       self.somaExtractionFilterSize,
+                                                                       self.cX,self.cY,
+                                                                       timeframe_neurites,
+                                                                       self.objectSizeToRemoveForSomaExtraction)
 
                 if len(np.where(timeframe_soma == 1)[0]) > 0:
 
                     #dilate soma a little bit to account for soma which are a bit soo small (leave some border of the thresholded soma)
-                    timeframe_somaLabels,nbOfLabels = ndimage.label(timeframe_soma,structure=[[1,1,1],[1,1,1],[1,1,1]])
+                    timeframe_somaLabels,nbOfLabels = ndimage.label(timeframe_soma,structure=
+                                                                    [[1,1,1],[1,1,1],[1,1,1]])
                     timeframe_soma_forMid = np.zeros_like(timeframe)
                     timeframe_soma_forMid[timeframe_soma == True] = 1
 
@@ -727,24 +776,42 @@ class NeuriteAnalyzer():
                     timeframe_islands_test = morph.skeletonize(timeframe_islands)
                     timeframe_islands_test[timeframe_soma] = False
                     if (len(np.where(timeframe_islands_test == 1)[0]) > self.minBranchSize):
-                        timeframe_islands = connectNeurites.start(timeframe_islands,timeframe,timeframe_neurites,[self.cX,self.cY],timeframe_somaborder,self.maxRelDifferenceOfLengths,self.minBranchSize,self.minContrast,self.maxLocalConnectionContrast,self.distanceToCheck,self.backgroundVal)
+                        #fill in gaps in neurites 
+                        #that might have happened during thresholding
+                        timeframe_islands = connectNeurites.start(timeframe_islands,
+                                                                  timeframe,
+                                                                  timeframe_neurites,
+                                                                  [self.cX,self.cY],
+                                                                  timeframe_somaborder,
+                                                                  self.maxRelDifferenceOfLengths,
+                                                                  self.minBranchSize,
+                                                                  self.minContrast,
+                                                                  self.maxLocalConnectionContrast,
+                                                                  self.distanceToCheck,
+                                                                  self.backgroundVal)
 
                         timeframe_neurites[timeframe_islands == True] = True
 
-                        timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,structure=[[1,1,1],[1,1,1],[1,1,1]])
+                        timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,structure=
+                                                                     [[1,1,1],[1,1,1],[1,1,1]])
                         timeframe_neurites[timeframe_labeled != timeframe_labeled[self.cY,self.cX]] = 0
 
 
                         timeframe_thresholded = copy.copy(timeframe_neurites)
 
-                        timeframe_neurites, timeframe_soma = SeparateNeurites.separateNeuritesBySomaDilation(timeframe_neurites,timeframe_soma,timeframe_thresholded,self.maxSomaDilationForSeparation)
-
+                        output = SeparateNeurites.separateNeuritesBySomaDilation(timeframe_neurites,
+                                                                                timeframe_soma,
+                                                                                timeframe_thresholded,
+                                                                                self.maxSomaDilationForSeparation)
+                        timeframe_neurites, timeframe_soma = output
 
                         if (len(np.where(timeframe_neurites > 0)[0]) > 0) & (len(np.where(timeframe_soma > 0)[0]) > 0):
                             timeframe_neurites = SeparateNeurites.separateNeuritesByOpening(timeframe_neurites,self.maxNeuriteOpening,timeframe_soma,timeframe,self.grainSizeToRemove,self.contrastThresholdToRemoveLabel,self.maxFractionToLoseByOpening)
 
 
-                            timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,structure=[[1,1,1],[1,1,1],[1,1,1]])
+                            timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,
+                                                                         structure=
+                                                                         [[1,1,1],[1,1,1],[1,1,1]])
                             timeframe_neurites[timeframe_labeled != timeframe_labeled[self.cY,self.cX]] = 0
                             timeframe_neurites[timeframe_soma == True] = False;
 
@@ -755,14 +822,17 @@ class NeuriteAnalyzer():
                             #project changes made by separation on thresholded image
                             timeframe_thresholded[(timeframe_neurites == 0) & (timeframe_soma == 0)] = 0
 
-                            maskToExcludeFilopodia = self.createMaskWithoutFilopodia(timeframe,timeframe_thresholded)
+                            maskToExcludeFilopodia = self.createMaskWithoutFilopodia(timeframe,
+                                                                                     timeframe_thresholded)
 
                             timeframe_neurites = morph.skeletonize(timeframe_thresholded)
 
                             timeframe_neurites[timeframe_soma == True] = False;
                             if len(np.where(timeframe_neurites == 1)[0]) > self.minBranchSize:
 
-                                timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,structure=[[1,1,1],[1,1,1],[1,1,1]])
+                                timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,
+                                                                             structure=
+                                                                             [[1,1,1],[1,1,1],[1,1,1]])
                                 neuriteLabels = np.unique(timeframe_labeled)
 
                                 if len(self.allNeurites) > 0:
@@ -773,7 +843,11 @@ class NeuriteAnalyzer():
                                 self.backgroundInt = np.mean(timeframe[timeframe_labeled == 0])
 
                                 for group in neuriteLabels:
-                                            self.processNeurite(timeframe,timeframe_neurites,group,timePoint,timeframe_soma,maskToExcludeFilopodia)
+                                    self.processNeurite(timeframe,
+                                                        timeframe_neurites,
+                                                        group,timePoint,
+                                                        timeframe_soma,
+                                                        maskToExcludeFilopodia)
 
 
 
@@ -788,7 +862,8 @@ class NeuriteAnalyzer():
         return timeframe_edge_thresh
 
 
-    def processNeurite(self,timeframe,timeframe_neurites,group,timePoint,timeframe_soma,maskToExcludeFilopodia):
+    def processNeurite(self,timeframe,timeframe_neurites,
+                       group,timePoint,timeframe_soma,maskToExcludeFilopodia):
         timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,structure=[[1,1,1],[1,1,1],[1,1,1]])
         groupData = np.where(timeframe_labeled == group)
         if((group > 0) & (len(groupData[0]) > self.minNeuriteLength)):
@@ -803,9 +878,12 @@ class NeuriteAnalyzer():
             groupImage_branches = copy.copy(groupImage)
             #get all branch points of neurite, separate neurite by deleting branch points
 
-            groupImage_branches, branchPoints = self.getBranchPoints(groupImage_branches,self.branchPointRadius,self.branchPointRefRadius)
+            groupImage_branches, branchPoints = self.getBranchPoints(groupImage_branches,
+                                                                     self.branchPointRadius,
+                                                                     self.branchPointRefRadius)
 
-            groupImage_branches_labeled,nbOfBranches = ndimage.label(groupImage_branches,structure=[[1,1,1],[1,1,1],[1,1,1]])
+            groupImage_branches_labeled,nbOfBranches = ndimage.label(groupImage_branches,
+                                                                     structure=[[1,1,1],[1,1,1],[1,1,1]])
 
             #create image of all branchpoints
             group_image_branchpoints = np.zeros_like(groupImage_branches_labeled)
@@ -849,7 +927,10 @@ class NeuriteAnalyzer():
                     starting_threshold = self.starting_threshold * 0.8
                 else:
                     starting_threshold = self.threshold_percentile * 0.8
-                self.processTimePoint(self.imagePath,self.timePoint,self.maskImData_thresh,self.maskSet,starting_threshold)
+                self.processTimePoint(self.imagePath,
+                                      self.timePoint,
+                                      self.maskImData_thresh,
+                                      self.maskSet,starting_threshold)
 
             #very high nb of branchpoints indicates suboptimal thresholding (too low threshold)
             elif (len(np.where(groupImage == 1)[0]) > self.minNeuriteLength):
@@ -866,7 +947,6 @@ class NeuriteAnalyzer():
                 keepLongBranches = True
                 length = 0
                 neuriteCoords = np.where(groupImage == 1)
-
 
                 closestNeuritePoints = self.getStartPointsOfNeurite(groupImage,copy.copy(timeframe_soma),timeframe)
 
@@ -896,7 +976,25 @@ class NeuriteAnalyzer():
                     labeledGroupImage,nbOfLabels = ndimage.label(groupImage,structure=[[1,1,1],[1,1,1],[1,1,1]])
                     #(self,allNeuritePoints,startPoint,labeledGroupImage,cX,cY,possibleOriginsColumns,allNeuritesColumns,overlappingOriginsColumns,identity,allNeurites,dilationForOverlap,overlapMultiplicator,maxChangeOfNeurite,minBranchSize,testNb,optimalThreshold,maxOverlapOfNeurites,img):s
                     self.identity = [self.date,self.experiment,self.neuron,self.channel,timePoint]
-                    constructor = neuriteConstructor(sortedArrays,labeledGroupImage,self.cX,self.cY,self.possibleOriginsColumns,self.allNeuritesColumns,self.overlappingOriginsColumns,self.identity,self.allNeurites,self.dilationForOverlap,self.overlapMultiplicator,self.maxChangeOfNeurite,self.minBranchSize,self.testNb,self.optimalThreshold,self.maxOverlapOfNeurites,timeframe,self.toleranceForSimilarity,self.dilationForSmoothing,self.gaussianForSmoothing)
+                    constructor = neuriteConstructor(sortedArrays,
+                                                     labeledGroupImage,
+                                                     self.cX,self.cY,
+                                                     self.possibleOriginsColumns,
+                                                     self.allNeuritesColumns,
+                                                     self.overlappingOriginsColumns,
+                                                     self.identity,
+                                                     self.allNeurites,
+                                                     self.dilationForOverlap,
+                                                     self.overlapMultiplicator,
+                                                     self.maxChangeOfNeurite,
+                                                     self.minBranchSize,
+                                                     self.testNb,
+                                                     self.optimalThreshold,
+                                                     self.maxOverlapOfNeurites,
+                                                     timeframe,
+                                                     self.toleranceForSimilarity,
+                                                     self.dilationForSmoothing,
+                                                     self.gaussianForSmoothing)
                     self.allNeurites,self.newNeuritesDf,self.testNb = constructor.constructNeurites()
                     #remove rows with NA values to prevent program error (can happen for < 1% cases by cross skeletonization between neurites)
                     self.newNeuritesDf = self.newNeuritesDf.dropna()
@@ -912,7 +1010,6 @@ class NeuriteAnalyzer():
                         self.allNeurites = pd.concat([self.allNeurites.iloc[:,diff_col_nb:],self.newNeuritesDf])
                     else:
                         self.allNeurites = pd.concat([self.allNeurites,self.newNeuritesDf])
-        #            print(self.allNeurites[['origin','branch','pxdifference']])
 
 
 

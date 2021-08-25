@@ -48,7 +48,7 @@ class neuriteConstructor():
         
         self.branchNb = 0
         self.overlappingOrigins = pd.DataFrame(columns=self.overlappingOriginsColumns)
-#                                    print("starting:{}".format(startingLabel))
+        
         self.newNeuritesDf = pd.DataFrame(columns=self.allNeuritesColumns)
         self.neuriteNb = 0
         self.neuriteOrigin = np.nan
@@ -63,66 +63,99 @@ class neuriteConstructor():
         self.img = img
         
     def constructNeurites(self):
-#        print("seperate neurites")  
         
         for neuritePoints in self.allNeuritePoints:
             if len(neuritePoints) > self.minBranchSize:
-                # ------------------------- CHECK WHICH NEURITE WAS JUST BUILD - REFERENCE TO OTHER TIME FRAMES ---------------------------
-                #discontinue separation if following code is repeatedly execute (> 2 times) without changing neurite structure
+                # CHECK WHICH NEURITE WAS JUST BUILD - 
+                #REFERENCE TO OTHER TIME FRAMES
+                #discontinue separation if following code is 
+                #repeatedly execute (> 2 times) without changing neurite structure
                 
                 self.constructedNeuriteImage = generalTools.getImageFromPoints(neuritePoints,self.img.shape)
                 
-    #            generalTools.showThresholdOnImg(self.constructedNeuriteImage,self.img)
-                
                 self.constructedNeuriteImage = generalTools.smoothenImage(self.constructedNeuriteImage,self.dilationForSmoothing,self.gaussianForSmoothing)
                 
-    #            generalTools.showThresholdOnImg(self.constructedNeuriteImage,self.img)
                 
                 self.allCoords = np.where(self.constructedNeuriteImage == 1)
                 
                 startPoint = generalTools.getClosestPoint(self.allCoords,[[neuritePoints[0][0],neuritePoints[0][1]]])
-    #            print(self.allCoords)
-    #            print(startPoint)
                 
                 #sort all points of neurite starting with the point closest to cell body (endpoint)
                 keepLongBranches = False
-#                print("BEFORE: {}".format(len(self.allCoords[0])))
-                self.sortedPoints, length,neuriteCoords_tmp = sortPoints.startSorting(self.allCoords,[startPoint],0,self.minBranchSize,[],keepLongBranches,-1,distancePossible=False)
+
+                (self.sortedPoints, 
+                 length,
+                 neuriteCoords_tmp) = sortPoints.startSorting(self.allCoords,
+                                                              [startPoint],0,
+                                                              self.minBranchSize,
+                                                              [],keepLongBranches,
+                                                              -1,
+                                                              distancePossible=False)
                 
-#                print("AFTER: {}".format(len( self.sortedPoints)))
-    #            print("------------ LENGTH IS {}".format(len(self.sortedPoints)))
+
                 self.sortedArray = np.transpose(self.sortedPoints)
                 
-#                testimgofn = np.zeros_like(self.img)
-#                testimgofn[[self.sortedArray[0],self.sortedArray[1]]] = 1
-#                generalTools.showThresholdOnImg(testimgofn,self.img,1)
-#                
-                self.neuriteOrigin, bestOrigin, neuriteBranch,start_branch,self.overlappingOrigins = self.getOriginFromPreviousTimeframes(self.overlappingOrigins,self.neuriteOrigin)
+                (self.neuriteOrigin, bestOrigin, 
+                 neuriteBranch, start_branch,
+                 self.overlappingOrigins) = self.getOriginFromPreviousTimeframes(self.overlappingOrigins,
+                                                              self.neuriteOrigin)
+                
                 
                 avgIntOfPoints = np.mean(self.img[self.sortedArray[0],self.sortedArray[1]])
                 self.testNb += 1
-                self.sortedArray = np.transpose(generalTools.convert_points_to_point_list(np.transpose(self.sortedArray)))
-                self.newNeuritesDf.loc[self.neuriteNb] = [self.identity[0],self.identity[1],self.identity[2],self.identity[3],self.identity[4],self.neuriteOrigin,neuriteBranch,start_branch,np.array([self.sortedArray[0][0],self.sortedArray[1][0]]),np.array([self.sortedArray[0][-1],self.sortedArray[1][-1]]),bestOrigin.loc['pxdifference'],bestOrigin.loc['diffRatio'],bestOrigin.loc['pxSimilar'],np.array([self.cX,self.cY]),self.sortedArray[0],self.sortedArray[1],bestOrigin.loc['gain_x'],bestOrigin.loc['gain_y'],bestOrigin.loc['loss_x'],bestOrigin.loc['loss_y'],length,0,self.optimalThreshold,avgIntOfPoints]
+                self.sortedArray = np.transpose(
+                                    generalTools.convert_points_to_point_list(
+                                        np.transpose(self.sortedArray))
+                                    )
+                self.newNeuritesDf.loc[self.neuriteNb] = [self.identity[0],
+                                                          self.identity[1],
+                                                          self.identity[2],
+                                                          self.identity[3],
+                                                          self.identity[4],
+                                                          self.neuriteOrigin,
+                                                          neuriteBranch,
+                                                          start_branch,
+                                                          np.array([
+                                                              self.sortedArray[0][0],
+                                                              self.sortedArray[1][0]]),
+                                                          np.array([
+                                                              self.sortedArray[0][-1],
+                                                              self.sortedArray[1][-1]]),
+                                                          bestOrigin.loc['pxdifference'],
+                                                          bestOrigin.loc['diffRatio'],
+                                                          bestOrigin.loc['pxSimilar'],
+                                                          np.array([self.cX,self.cY]),
+                                                          self.sortedArray[0],
+                                                          self.sortedArray[1],
+                                                          bestOrigin.loc['gain_x'],
+                                                          bestOrigin.loc['gain_y'],
+                                                          bestOrigin.loc['loss_x'],
+                                                          bestOrigin.loc['loss_y'],
+                                                          length,0,
+                                                          self.optimalThreshold,
+                                                          avgIntOfPoints]
                 
                 self.branchNb += 1
                 self.neuriteNb += 1        
-#                plt.figure()
-#                plt.imshow(np.zeros((512,512)))
-#                plt.text(40,40,str(self.newNeuritesDf[['time','origin','branch','pxdifference','pxSimilar']]))
+
         
         if len(self.newNeuritesDf) > 0:
+            #set origin number similar to previous timeframes
             self.neuriteOrigin, self.newNeuritesDf = self.setOriginIfNoneWasFound(self.neuriteOrigin,self.newNeuritesDf)
-    #        print("ALL TOGETHER")
-    #        print(self.newNeuritesDf[['origin','branch','pxdifference']])
+
             self.newNeuritesDf,allOrigins = self.setRemainingOriginsOfNeurites(self.newNeuritesDf,self.neuriteOrigin)
             
+            #set branch number similar to previous timeframes
             self.newNeuritesDf,allOrigins = self.checkIfBranchesWithSameOriginOverlap(self.newNeuritesDf)
             
+            #set remaining branches which were not found
+            #in previous timeframes
             self.newNeuritesDf = self.setRemainingBranchesOfNeurites(allOrigins,self.newNeuritesDf,neuriteBranch)
     
             self.newNeuritesDf = self.removeDoubledBranches(allOrigins,self.newNeuritesDf,self.allNeurites)
-    #        print(self.newNeuritesDf[['origin','branch','pxdifference']])
     
+            #exclude neurites with different origins which are overlapping
+            #this would probably indicate crossing points used as branch points
             self.allNeurites, self.newNeuritesDf = self.checkForOverlapBetweenDifferentOrigins(self.overlappingOrigins,self.allNeurites,self.newNeuritesDf)       
             
             #remove branches that overlap 70% starting from second timeframe
@@ -130,13 +163,12 @@ class neuriteConstructor():
                 self.newNeuritesDf = self.remove_overlapping_branches(allOrigins,self.newNeuritesDf)
     
             #at this point, all origins and branches are set                             
-#            plt.figure()
-#            plt.imshow(np.zeros((512,512)))
-#            plt.text(40,40,str(self.newNeuritesDf[['time','origin','branch','pxdifference','pxSimilar']]))
+
         return self.allNeurites,self.newNeuritesDf,self.testNb
 
     def checkIfBranchesWithSameOriginOverlap(self,newNeuritesDf):
-        #check if al branches for one origin show overlap. For branches which do not show overlap, create new origins.
+        #check if al branches for one origin show overlap. 
+        #For branches which do not show overlap, create new origins.
         allOrigins = np.unique(newNeuritesDf['origin'])                        
         for origin in allOrigins:
             oneOrigin = newNeuritesDf.loc[newNeuritesDf['origin'] == origin]
@@ -155,9 +187,7 @@ class neuriteConstructor():
                         nextOrigin += 1
                     for index in group:
                         newNeuritesDf.loc[index,'origin'] = nextOrigin
-#        plt.figure()
-#        plt.imshow(np.zeros((512,512)))
-#        plt.text(40,40,str(newNeuritesDf[['origin','branch']]))
+                        
         allOrigins = np.unique(newNeuritesDf['origin'])
         return newNeuritesDf, allOrigins
     

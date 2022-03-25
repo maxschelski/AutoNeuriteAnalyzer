@@ -98,23 +98,23 @@ class ThresholdNeuron:
                         img_filtered = img
         
         if not np.isnan(percentile):
-                    #changed last parameter from imgOfWholeNeuron to img_threshold
-                    nbOfLabels,nbPixHoles,lastImg,thresholdVal = ThresholdNeuron.evalThreshold(img,Ints,sortedInts,percentile,grainSizeToRemove,img_threshold)
-                   
+            #changed last parameter from imgOfWholeNeuron to img_threshold
+            nbOfLabels,nbPixHoles,lastImg,thresholdVal = ThresholdNeuron.evalThreshold(img,Ints,sortedInts,percentile,grainSizeToRemove,img_threshold)
+           
 #    
-                        #define one soma area that will not be included in skeleton analysis
-                    soma,cX,cY,lastImg_clean = ThresholdNeuron.getSomaFromThresholdedImage(lastImg,minSomaOverflow,somaExtractionFilterSize,cX,cY,objectSizeToRemoveForSomaExtraction,closingForPresoma)
-                   
-                    #if no soma was found, then cX and cY are nan
-                    if np.isnan(cX) | (len(np.where(soma == 1)[0]) == 0):
-                        print("no soma was found")
-                        img_filtered=img
-                        thresholdVal = np.nan
-                        threshold_percentile = np.nan
-                        cX = np.nan
-                        cY = np.nan
-                    else:
-                        img_filtered, img_filtered_forBackgound, thresholdVal,threshold_percentile = ThresholdNeuron.refineThreshold(img,percentile,lastImg,lastImg_clean,copy.copy(cX),copy.copy(cY),soma,Ints,sortedInts,maxThresholdChange,percentileChangeForThreshold,dilationForOverlap,overlapMultiplicator,minBranchSize,grainSizeToRemove)   
+                #define one soma area that will not be included in skeleton analysis
+            soma,cX,cY,lastImg_clean = ThresholdNeuron.getSomaFromThresholdedImage(lastImg,minSomaOverflow,somaExtractionFilterSize,cX,cY,objectSizeToRemoveForSomaExtraction,closingForPresoma)
+           
+            #if no soma was found, then cX and cY are nan
+            if np.isnan(cX) | (len(np.where(soma == 1)[0]) == 0):
+                print("no soma was found")
+                img_filtered=img
+                thresholdVal = np.nan
+                threshold_percentile = np.nan
+                cX = np.nan
+                cY = np.nan
+            else:
+                img_filtered, img_filtered_forBackgound, thresholdVal,threshold_percentile = ThresholdNeuron.refineThreshold(img,percentile,lastImg,lastImg_clean,copy.copy(cX),copy.copy(cY),soma,Ints,sortedInts,maxThresholdChange,percentileChangeForThreshold,dilationForOverlap,overlapMultiplicator,minBranchSize,grainSizeToRemove)   
                         
         if not np.isnan(thresholdVal):
             backgroundVal = np.mean(img[(img_filtered_forBackgound == 0) & (img != 0)])

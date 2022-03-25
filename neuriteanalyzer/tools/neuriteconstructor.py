@@ -151,7 +151,8 @@ class neuriteConstructor():
             #set remaining branches which were not found
             #in previous timeframes
             self.newNeuritesDf = self.setRemainingBranchesOfNeurites(allOrigins,self.newNeuritesDf,neuriteBranch)
-    
+            
+            #check if branches are doubled for same origin, only keep longest branch
             self.newNeuritesDf = self.removeDoubledBranches(allOrigins,self.newNeuritesDf,self.allNeurites)
     
             #exclude neurites with different origins which are overlapping
@@ -180,7 +181,8 @@ class neuriteConstructor():
                 #get next origin which has not been used
                 nextOrigin = np.nan                
                 for group in allOverlappingGroups:
-                        #only define first next origin to use from scratch, then each iteration increment next origin
+                        #only define first next origin to use from scratch, 
+                        #then each iteration increment next origin
                     if np.isnan(nextOrigin):
                         nextOrigin = self.getNextOrigin(newNeuritesDf,origin)
                     else:
@@ -471,15 +473,7 @@ class neuriteConstructor():
                         #remove bet branch from this branch neurites - "branch" wont be changed for that neurite
                         thisBranchNewNeurites = thisBranchNewNeurites.drop(bestBranch['index'],axis=0)
                         
-#                        plt.figure()
-#                        plt.imshow(np.zeros((512,512)))
-#                        plt.text(40,40,str(bestBranch[['time','origin','branch','pxdifference','pxSimilar']]))
-#                        plt.figure()
-#                        plt.imshow(np.zeros((512,512)))
-#                        plt.text(40,40,str(mostSimilarNeurites))
-#                        plt.figure()
-#                        plt.imshow(np.zeros((512,512)))
-#                        plt.text(40,40,str(thisBranchNewNeurites))
+                        
                         identity = []
                         identity.append(newNeuritesDf['date'].iloc[0])
                         identity.append(newNeuritesDf['experiment'].iloc[0])
@@ -488,10 +482,8 @@ class neuriteConstructor():
                         #delete all rows which do not belong to the longest neurite
                         for newNeuritesBranchRowNb in thisBranchNewNeurites.index.values:
                             nextNeuriteBranch = self.getNextBranchNb(thisOrigin,newNeuritesDf,allNeurites,identity)
-#                            plt.figure()
-#                            plt.imshow(np.zeros((512,512)))
-#                            plt.text(40,40,str("something was changed!"))
-#                            plt.text(80,80,str(nextNeuriteBranch))
+
+
                             newNeuritesDf.loc[newNeuritesBranchRowNb,'branch'] = nextNeuriteBranch
                             newNeuritesDf.at[newNeuritesBranchRowNb,'loss_x'] = []
                             newNeuritesDf.at[newNeuritesBranchRowNb,'loss_y'] = []

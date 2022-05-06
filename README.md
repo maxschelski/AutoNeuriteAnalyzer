@@ -7,7 +7,7 @@ Used in Schelski and Bradke 2021
 
 1. Open a terminal, navigate to the folder where you want to put the repository and clone it:
 > git clone https://github.com/maxschelski/pyneurite.git
-2. Navigate into the folder of the repository (auto-neurite-analyzer):
+2. Navigate into the folder of the repository (pyneurite):
 > cd pyneurite
 3. Install pyneurite locally using pip:
 > pip install -e .

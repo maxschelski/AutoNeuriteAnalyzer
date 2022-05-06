@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
 setup(
-      name="neuriteanalyzer",
+      name="pyneurite",
       packages=find_packages()
       )

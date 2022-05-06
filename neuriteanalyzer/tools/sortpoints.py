@@ -11,6 +11,7 @@ Created on Fri Jul  5 13:12:33 2019
 
 @author: schelskim
 """
+from .generaltools import generalTools
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -18,7 +19,6 @@ from skimage import morphology as morph
 from skimage.morphology import disk
 from skimage.morphology import square
 import copy
-from tools.generaltools import generalTools
 from skimage.filters import median
 from scipy import ndimage
 from scipy.signal import argrelextrema
@@ -32,11 +32,16 @@ class sortPoints():
     
     @staticmethod
     def startSorting(neuriteCoords, sortedPoints, length,minBranchSize,
-                     decisivePoints = [], keepLongBranches=False, branchLengthToKeep = -1,
-                     distancePossible=True, constructNeurite=False, img=[], groupImage_branches_labeled=[],
-                     sumIntensitieGroupImg=[], groupImage=[], maskToExcludeFilopodia=[],
-                     minFilopodiaLength=0, maxFilopodiaLength=0, minContrastFilopodia=0,
+                     decisivePoints = [], keepLongBranches=False,
+                     branchLengthToKeep = -1,
+                     distancePossible=True, constructNeurite=False, img=[],
+                     groupImage_branches_labeled=[],
+                     sumIntensitieGroupImg=[], groupImage=[],
+                     maskToExcludeFilopodia=[],
+                     minFilopodiaLength=0, maxFilopodiaLength=0,
+                     minContrastFilopodia=0,
                      minAllowedContrastForFindingFilopodia=0):
+
         if branchLengthToKeep == -1:
             branchLengthToKeep = minBranchSize
         continueSorting = True
@@ -52,45 +57,61 @@ class sortPoints():
         bestFittingLabel = 0
         perm_deleted_points = []
         while continueSorting:
-            sortedPoints, length,neuriteCoords,deletedSortedPoints,navigateThroughBestLabel, decisivePoints, bestFittingLabel, continueSorting, loop_points, perm_deleted_points = sortPoints.sortNextPoint(neuriteCoords, sortedPoints, length, navigateThroughBestLabel, 
-                                                                                                                                                                                    decisivePoints, deletedSortedPoints, distancePossible, constructNeurite,img,
-                                                                                                                                                                                     groupImage_branches_labeled, sumIntensitieGroupImg, groupImage,bestFittingLabel,loop_points,perm_deleted_points)
-
-            
-
-#            if not constructNeurite:
-#                print(len(sortedPoints))
-#                if (len(sortedPoints) > 190) & len(sortedPoints) < 347:
-#                    print(decisivePoints)
-#                    testimg = generalTools.getImageFromPoints(sortedPoints,(512,512))
-#                    generalTools.showThresholdOnImg(testimg,sumIntensitieGroupImg)
+            (sortedPoints,
+             length,
+             neuriteCoords,
+             deletedSortedPoints,
+             navigateThroughBestLabel,
+             decisivePoints,
+             bestFittingLabel,
+             continueSorting,
+             loop_points,
+             perm_deleted_points) = sortPoints.sortNextPoint(neuriteCoords,
+                                                             sortedPoints,
+                                                             length,
+                                                             navigateThroughBestLabel,
+                                                             decisivePoints,
+                                                             deletedSortedPoints,
+                                                             distancePossible,
+                                                             constructNeurite,
+                                                             img,
+                                                             groupImage_branches_labeled,
+                                                             sumIntensitieGroupImg,
+                                                             groupImage,
+                                                             bestFittingLabel,
+                                                             loop_points,
+                                                             perm_deleted_points)
              
-            if not continueSorting:
-#                testimg = generalTools.getImageFromPoints(sortedPoints,(512,512))
-#                plt.figure()
-#                plt.figure()
-#                plt.figure()
-#                plt.imshow(testimg)
-                sortedPoints = sortPoints.constructNeuriteFromSortedPoints(sortedPoints,deletedSortedPoints,constructNeurite,minFilopodiaLength,maxFilopodiaLength,minContrastFilopodia,minAllowedContrastForFindingFilopodia,img,maskToExcludeFilopodia,branchLengthToKeep,keepLongBranches,groupImage_branches_labeled,branches_image)
-                
-#                justOne = False
-#                for points in sortedPoints:
-#                    if len(points) > 2:
-#                        testimg = generalTools.getImageFromPoints(points,(512,512))
-##                        plt.figure()
-##                        plt.imshow(testimg)
-#                    else:
-#                        justOne = True
-#                if justOne:
-#                    testimg = generalTools.getImageFromPoints(sortedPoints,(512,512))
-##                    plt.figure()
-##                    plt.imshow(testimg)
+            if continueSorting:
+                continue
+
+            sortedPoints = sortPoints.constructNeuriteFromSortedPoints(sortedPoints,
+                                                                       deletedSortedPoints,
+                                                                       constructNeurite,
+                                                                       minFilopodiaLength,
+                                                                       maxFilopodiaLength,
+                                                                       minContrastFilopodia,
+                                                                       minAllowedContrastForFindingFilopodia,
+                                                                       img,
+                                                                       maskToExcludeFilopodia,
+                                                                       branchLengthToKeep,
+                                                                       keepLongBranches,
+                                                                       groupImage_branches_labeled,
+                                                                       branches_image)
                 
         return sortedPoints, length,neuriteCoords
     
     
     @staticmethod
-    def constructNeuriteFromSortedPoints(sortedPoints,deletedSortedPoints,constructNeurite,minFilopodiaLength,maxFilopodiaLength,minContrastFilopodia,minAllowedContrastForFindingFilopodia,img,maskToExcludeFilopodia,branchLengthToKeep,keepLongBranches,groupImage_branches_labeled,branches_image):
+    def constructNeuriteFromSortedPoints(sortedPoints,deletedSortedPoints,
+                                         constructNeurite,minFilopodiaLength,
+                                         maxFilopodiaLength,
+                                         minContrastFilopodia,
+                                         minAllowedContrastForFindingFilopodia,
+                                         img,maskToExcludeFilopodia,
+                                         branchLengthToKeep,keepLongBranches,
+                                         groupImage_branches_labeled,
+                                         branches_image):
         
         #median filter disk size for smoothing prior to calculating contrast to remove filopodia
         filterSizeSmoothing = 10
@@ -98,12 +119,27 @@ class sortPoints():
         deletedSortedPoints.append(sortedPoints)
         # if no new px werde added after last trial from last px, compare all branches from single px
         if (len(deletedSortedPoints) > 0):
-            longestBranch,deletedSortedPoints = sortPoints.getLongestBranch(deletedSortedPoints,constructNeurite,minFilopodiaLength,maxFilopodiaLength,minContrastFilopodia,minAllowedContrastForFindingFilopodia,copy.copy(img),filterSizeSmoothing,branchLengthToKeep,groupImage_branches_labeled,branches_image)
+            (longestBranch,
+             deletedSortedPoints) = sortPoints.getLongestBranch(deletedSortedPoints,
+                                                                constructNeurite,
+                                                                minFilopodiaLength,
+                                                                maxFilopodiaLength,
+                                                                minContrastFilopodia,
+                                                                minAllowedContrastForFindingFilopodia,
+                                                                copy.copy(img),
+                                                                filterSizeSmoothing,
+                                                                branchLengthToKeep,
+                                                                groupImage_branches_labeled,
+                                                                branches_image)
             
             sortedPoints = longestBranch
             
             if keepLongBranches:
-                sortedPoints = sortPoints.checkWhichBranchesToKeep(deletedSortedPoints,branchLengthToKeep,constructNeurite,longestBranch,img)
+                sortedPoints = sortPoints.checkWhichBranchesToKeep(deletedSortedPoints,
+                                                                   branchLengthToKeep,
+                                                                   constructNeurite,
+                                                                   longestBranch,
+                                                                   img)
                 
             deletedSortedPoints = []
         elif constructNeurite:
@@ -112,19 +148,40 @@ class sortPoints():
     
     
     @staticmethod
-    def sortNextPoint(neuriteCoords,sortedPoints, length,navigateThroughBestLabel,decisivePoints,deletedSortedPoints,distancePossible,constructNeurite,img,groupImage_branches_labeled,sumIntensitieGroupImg,groupImage,bestFittingLabel,loop_points,perm_deleted_points):
+    def sortNextPoint(neuriteCoords,sortedPoints, length,
+                      navigateThroughBestLabel,decisivePoints,
+                      deletedSortedPoints,distancePossible,constructNeurite,
+                      img,groupImage_branches_labeled,sumIntensitieGroupImg,
+                      groupImage,bestFittingLabel,loop_points,
+                      perm_deleted_points):
+
         continueSorting = True
-#        
-#        if constructNeurite:
-#            print(sortedPoints[-1])
-#            print(len(sortedPoints))
-        
+
         if navigateThroughBestLabel:
             if groupImage_branches_labeled[sortedPoints[-1][0],sortedPoints[-1][1]] != bestFittingLabel:
                 bestFittingLabel = 0
                 navigateThroughBestLabel = False
         
-        nearestNeighbor,distance,decisivePoints,isDecisivePoint,sortedPoints,neuriteCoords,navigateThroughBestLabel,bestFittingLabel, loop_found, loop_points = sortPoints.getNextNeighbor(neuriteCoords,copy.copy(sortedPoints),decisivePoints,constructNeurite,distancePossible,copy.copy(groupImage_branches_labeled),sumIntensitieGroupImg,groupImage,navigateThroughBestLabel,loop_points,bestFittingLabel)
+        (nearestNeighbor,
+         distance,
+         decisivePoints,
+         isDecisivePoint,
+         sortedPoints,
+         neuriteCoords,
+         navigateThroughBestLabel,
+         bestFittingLabel,
+         loop_found,
+         loop_points) = sortPoints.getNextNeighbor(neuriteCoords,
+                                                   copy.copy(sortedPoints),
+                                                   decisivePoints,
+                                                   constructNeurite,
+                                                   distancePossible,
+                                                   copy.copy(groupImage_branches_labeled),
+                                                   sumIntensitieGroupImg,
+                                                   groupImage,
+                                                   navigateThroughBestLabel,
+                                                   loop_points,
+                                                   bestFittingLabel)
         if len(nearestNeighbor) > 0:
             #if is decisive point (only true in construct neurite), then more than one point was added already
             if isDecisivePoint:
@@ -133,43 +190,57 @@ class sortPoints():
             else:
                 sortedPoints = np.vstack((sortedPoints,nearestNeighbor))
                 length += distance
-            
-        else:
-            if (len(decisivePoints) > 0):
-                    #create copy of sortedPoints to change sortedPoints in for loop without disturbing the loop
-                    #go through all points in sorted points from last decisive point onwards
-                    
-                    #if reset after loop, first remove last point so that it won't be removed from neuritecoords
-                    saveDeletedPoints = True
-#                    if there is a currently active loop point, check if decisive point is the loop point
-                    reset_after_loop = False
-                    if (len(loop_points) > 0) & constructNeurite:
-#                            testimg = generalTools.getImageFromPoints(sortedPoints,(512,512))
-#                            generalTools.showThresholdOnImg(testimg,sumIntensitieGroupImg)
-#                            plt.figure()
-#                            plt.imshow(np.zeros((512,512)))
-#                            plt.text(40,40,str(loop_points))
-                            neuriteCoords,reset_after_loop, saveDeletedPoints,neurite_points = sortPoints.re_enter_points_from_loop(sortedPoints,decisivePoints,loop_points,neuriteCoords,deletedSortedPoints,perm_deleted_points)
-#                    if reset_after_loop:
-#                        for a, point in enumerate(neurite_points):
-#                            for b, other_point in enumerate(neurite_points):
-#                                if a != b:
-#                                    if (point[0] == other_point[0]) & (point[1] == other_point[1]):
-#                                        print("DOUBLE POINT!!!!")
-#                        print("before - neurite coords: {} - deleted: {}".format(len(neuriteCoords[0]),len(deletedSortedPoints)))           
-                    sortedPoints, neuriteCoords,deletedSortedPoints = sortPoints.deleteNeuriteCoords(neuriteCoords,decisivePoints[-1]+1,sortedPoints,saveDeletedPoints,deletedSortedPoints,constructNeurite)
-                    #add new points to permanently deleted points array (so that they are never added again to neuritecoords)
-                    if reset_after_loop:
-                        new_neurite_points = np.transpose(neuriteCoords)
-                        new_perm_deleted_points = np.array(list(set(tuple(map(tuple,neurite_points))).difference(set(tuple(map(tuple,new_neurite_points))))))
-                        for new_perm_deleted_point in new_perm_deleted_points:
-                            perm_deleted_points.append(new_perm_deleted_point)
+            return (sortedPoints, length,neuriteCoords,deletedSortedPoints,
+                    navigateThroughBestLabel, decisivePoints, bestFittingLabel,
+                    continueSorting,loop_points,perm_deleted_points)
+
+        # go on to constructing neurite when no decisive points are left
+        if (len(decisivePoints) <= 0):
+            continueSorting = False
+            return (sortedPoints, length,neuriteCoords,deletedSortedPoints,
+                    navigateThroughBestLabel, decisivePoints, bestFittingLabel,
+                    continueSorting,loop_points,perm_deleted_points)
+
+        #create copy of sortedPoints to change sortedPoints in for loop without disturbing the loop
+        #go through all points in sorted points from last decisive point onwards
+
+        #if reset after loop, first remove last point so that it won't be removed from neuritecoords
+        saveDeletedPoints = True
+        # if there is a currently active loop point, check if decisive point is the loop point
+        reset_after_loop = False
+        if (len(loop_points) > 0) & constructNeurite:
+            (neuriteCoords,
+             reset_after_loop,
+             saveDeletedPoints,
+             neurite_points) = sortPoints.re_enter_points_from_loop(sortedPoints,
+                                                                    decisivePoints,
+                                                                    loop_points,
+                                                                    neuriteCoords,
+                                                                    deletedSortedPoints,
+                                                                    perm_deleted_points)
+
+        (sortedPoints,
+         neuriteCoords,
+         deletedSortedPoints) = sortPoints.deleteNeuriteCoords(neuriteCoords,
+                                                               decisivePoints[-1]+1,
+                                                               sortedPoints,
+                                                               saveDeletedPoints,
+                                                               deletedSortedPoints,
+                                                               constructNeurite)
+        #add new points to permanently deleted points array (so that they are never added again to neuritecoords)
+        if reset_after_loop:
+            new_neurite_points = np.transpose(neuriteCoords)
+            neurite_points_set = set(tuple(map(tuple,neurite_points)))
+            new_neurite_points_set = set(tuple(map(tuple,new_neurite_points)))
+            new_perm_deleted_points = np.array(list(neurite_points_set.difference(new_neurite_points_set)))
+            for new_perm_deleted_point in new_perm_deleted_points:
+                perm_deleted_points.append(new_perm_deleted_point)
 #                        print("after - neurite coords: {} - deleted: {}".format(len(neuriteCoords[0]),len(deletedSortedPoints)))
-                    del decisivePoints[-1]
-            else:
-                #go on to constructing neurite when no decisive points are left
-                continueSorting = False
-        return sortedPoints, length,neuriteCoords,deletedSortedPoints,navigateThroughBestLabel, decisivePoints, bestFittingLabel, continueSorting,loop_points,perm_deleted_points
+        del decisivePoints[-1]
+
+        return (sortedPoints, length,neuriteCoords,deletedSortedPoints,
+                navigateThroughBestLabel, decisivePoints, bestFittingLabel,
+                continueSorting,loop_points,perm_deleted_points)
 
 
     @staticmethod
@@ -288,7 +359,11 @@ class sortPoints():
         return neighbors, loop_found, loop_points
 
     @staticmethod
-    def getNextNeighbor(neuriteCoords,sortedPoints,decisivePoints,constructNeurite,distancePossible,groupImage_branches_labeled,sumIntensitieGroupImg,groupImage,navigateThroughBestLabel,loop_points,bestFittingLabel=0):
+    def getNextNeighbor(neuriteCoords,sortedPoints,decisivePoints,
+                        constructNeurite,distancePossible,
+                        groupImage_branches_labeled,sumIntensitieGroupImg,
+                        groupImage,navigateThroughBestLabel,loop_points,
+                        bestFittingLabel=0):
             
         neighbors,loop_found,loop_points  = sortPoints.getNextNeighbors(sortedPoints,neuriteCoords,groupImage_branches_labeled,loop_points)        
             
@@ -298,133 +373,131 @@ class sortPoints():
         if len(neighbors) > 0:
             minDistance = 10
             nearestNeighbor, distance = sortPoints.getNearestNeighbor(copy.copy(neighbors),constructNeurite,sortedPoints,minDistance,navigateThroughBestLabel,bestFittingLabel,groupImage_branches_labeled)
-                
-            
-#        if constructNeurite:
-##            print(loop_points)
-##            print(neighbors)
-##            print(nearestNeighbor)
-##            plt.figure()
-##            plt.imshow(np.zeros((512,512)))
-##            plt.text(20,20,str(neighbors))
-##            plt.text(20,100,str(nearestNeighbor))
-#            if (len(sortedPoints) > 80):
-#                neuriteCoordsImg = np.zeros_like(sumIntensitieGroupImg)
-#                neuriteCoordsImg[neuri teCoords[0],neuriteCoords[1]] = 1
-#                neuriteCoordsImg[sortedPoints[-1][0],sortedPoints[-1][1]] = 2
-#                if len(nearestNeighbor) > 0:
-#                    neuriteCoordsImg[nearestNeighbor[0],nearestNeighbor[1]] = 3
-#                crop = neuriteCoordsImg[sortedPoints[-1][0]-20:sortedPoints[-1][0]+20,sortedPoints[-1][1]-20:sortedPoints[-1][1]+20]
-#    #            
-#                plt.figure()
-#                plt.imshow(crop)
-#    #            
-#                crop = groupImage_branches_labeled[sortedPoints[-1][0]-20:sortedPoints[-1][0]+20,sortedPoints[-1][1]-20:sortedPoints[-1][1]+20]
-#                
-#                plt.figure()
-#                plt.imshow(crop)
-#                
-#                sortedPointsImg= np.zeros_like(sumIntensitieGroupImg)
-#                sortedCoords = np.transpose(sortedPoints)
-#                sortedPointsImg[sortedCoords[0],sortedCoords[1]] = 1
-#                generalTools.showThresholdOnImg(sortedPointsImg,sumIntensitieGroupImg,1)
-#                
-#                crop = sortedPointsImg[sortedPoints[-1][0]-20:sortedPoints[-1][0]+20,sortedPoints[-1][1]-20:sortedPoints[-1][1]+20]
-#                
-#                plt.figure()
-#                plt.imshow(crop)
-        if ((len(neighbors) > 1) & (len(nearestNeighbor) > 0)) | (constructNeurite & (len(nearestNeighbor) > 0)):
-             
-            if constructNeurite:
-                
-                if(groupImage_branches_labeled[nearestNeighbor[0],nearestNeighbor[1]] != 0):
-                    if (len(neighbors) > 1):
-#                        plt.figure()
-                        decisivePoints = sortPoints.appendDecisivePoint(decisivePoints,(len(sortedPoints)-1))
-                else:
-#                    plt.figure()
-#                    plt.figure()
-                    #set all parts of labeled branches as 0 which are not included in set of points anymore (were deleted from neuritecoords during reset to last decisive point)
-                    neuriteCoordsImage = np.zeros_like(groupImage_branches_labeled)
-                    neuriteCoordsImage[neuriteCoords[0],neuriteCoords[1]] = 1
-                    groupImage_branches_labeled[neuriteCoordsImage != 1] = 0
-                    
-                    groupImage_branches_labeled_tmp = groupImage_branches_labeled.astype(bool)
-                    groupImage_branches_labeled_tmp = morph.remove_small_objects(groupImage_branches_labeled_tmp,min_size=2,connectivity=2)
-                    groupImage_branches_labeled[groupImage_branches_labeled_tmp == 0] = 0
-                
-                    #delete parts in neurite coords image that were deleted in labeled branches
-                    neuriteCoordsImage[(groupImage_branches_labeled_tmp == 0) & (groupImage_branches_labeled > 0)] = 0
-                    neuriteCoords = np.where(neuriteCoordsImage == 1)
-                    
-                    groupImage_branches_labeled = groupImage_branches_labeled_tmp
-                    
-                    labelsAroundPoint, branchPointImage = sortPoints.getLabelsAroundPoint(groupImage_branches_labeled,neuriteCoords,copy.copy(nearestNeighbor),groupImage)
-                    nbOfLabelsAroundPoint = len(labelsAroundPoint)
-                    
-#                    print("labels around point: {}".format(labelsAroundPoint))
-#                    plt.text(10,10,str(labelsAroundPoint))
 
-                    if nbOfLabelsAroundPoint <= 3:
-                        if (len(neighbors) > 1):
-                            decisivePoints = sortPoints.appendDecisivePoint(decisivePoints,(len(sortedPoints)-1))
-                    else:
-                        labelsSorted = groupImage_branches_labeled[np.transpose(sortedPoints)[0],np.transpose(sortedPoints)[1]]
-#                        print("all sorted Labels: {} / nb sorted: {}".format(labelsSorted,len(labelsSorted)))
-                        anyLabelNotSorted, nbLabelsSorted, labelsSorted = sortPoints.countLabelsAlreadySorted(labelsAroundPoint,labelsSorted)
-#                        plt.text(100,100,str(labelsSorted)+" nb: "+str(nbLabelsSorted))
-#                        print(labelsSorted)
-                        if nbLabelsSorted > 1:
-                                
-                            nearestNeighbor = []
-                            if len(decisivePoints) > 0:
-                                
-                                sortedPoints, neuriteCoords, deletedSortedPoints = sortPoints.deleteNeuriteCoords(neuriteCoords,decisivePoints[-1]+1,sortedPoints,False,[])
-                                del decisivePoints[-1]
-                                
-                        elif (anyLabelNotSorted):
-                            
-                            distances = []
-                            isDecisivePoint = True
-                            
-                            distances, sortedPoints, decisivePoints = sortPoints.appendParamsOfNearestNeighbor(distances,distance,nearestNeighbor,sortedPoints,decisivePoints)
-                            #for decisivePoint, check which label fits better (better average sum of intensities at each point)
-                            bestFittingLabel, wrongLabels = sortPoints.findBestFittingLabel(sortedPoints,groupImage_branches_labeled,sumIntensitieGroupImg,labelsAroundPoint,labelsSorted,branchPointImage,neuriteCoordsImage)
-                            
-                            inTransitToBestLabel = True
-                            branchPointCoords = np.where(branchPointImage == 1)
-                            firstDevisivePointIndex = len(decisivePoints)
-                            
-                            foundCorrectPoint = False
-#                            print("best label: {}".format(bestFittingLabel))
-                            #traverse through branchPoint, finding the route to bestfittinglabel
-#                            crop = branchPointImage[sortedPoints[-1][0]-20:sortedPoints[-1][0]+20,sortedPoints[-1][1]-20:sortedPoints[-1][1]+20]
-#                            plt.figure()
-#                            plt.imshow(crop)
-                            
-                            while inTransitToBestLabel:
-#                                print("in branchPoint: {}".format(sortedPoints[-1]))
-#                                print(len(sortedPoints))
-                                distances, sortedPoints, decisivePoints, branchPointCoords,inTransitToBestLabel,foundCorrectPoint = sortPoints.navigateThroughBranchPoint(wrongLabels,bestFittingLabel,groupImage_branches_labeled,distances, sortedPoints, decisivePoints,branchPointCoords,firstDevisivePointIndex,foundCorrectPoint)
-                                #initiate that two more px of bestfitting label will be added (to prevent going back into branchpoint, causing eternal loop)
-#                                print(groupImage_branches_labeled[sortedPoints[-1][0],sortedPoints[-1][1]])
-                                
-#                                neuriteCoordsImg = np.zeros_like(sumIntensitieGroupImg)
-#                                neuriteCoordsImg[neuriteCoords[0],neuriteCoords[1]] = 1
-#                                neuriteCoordsImg[sortedPoints[-1][0],sortedPoints[-1][1]] = 2
-#                                crop = neuriteCoordsImg[sortedPoints[-1][0]-20:sortedPoints[-1][0]+20,sortedPoints[-1][1]-20:sortedPoints[-1][1]+20]
-#                    #            
-#                                plt.figure()
-#                                plt.imshow(crop)
-                                if foundCorrectPoint:
-                                    navigateThroughBestLabel = True
-                                    inTransitToBestLabel = False
-                            distance = distances
-                            nearestNeighbor = sortedPoints[-1]
-            else:
+        if not(((len(neighbors) > 1) & (len(nearestNeighbor) > 0)) | (constructNeurite & (len(nearestNeighbor) > 0))):
+                return (nearestNeighbor,distance,decisivePoints,isDecisivePoint,
+                        sortedPoints, neuriteCoords,navigateThroughBestLabel,
+                        bestFittingLabel,loop_found, loop_points)
+             
+        if not constructNeurite:
+            decisivePoints = sortPoints.appendDecisivePoint(decisivePoints,
+                                                            (len(sortedPoints)-1))
+
+            return (nearestNeighbor,distance,decisivePoints,isDecisivePoint,
+                    sortedPoints, neuriteCoords,navigateThroughBestLabel,
+                    bestFittingLabel,loop_found, loop_points)
+
+        if(groupImage_branches_labeled[nearestNeighbor[0],nearestNeighbor[1]] != 0):
+            if (len(neighbors) > 1):
                 decisivePoints = sortPoints.appendDecisivePoint(decisivePoints,(len(sortedPoints)-1))
-        
-        return nearestNeighbor,distance,decisivePoints,isDecisivePoint,sortedPoints, neuriteCoords,navigateThroughBestLabel,bestFittingLabel,loop_found, loop_points
+            return (nearestNeighbor,distance,decisivePoints,isDecisivePoint,
+                    sortedPoints, neuriteCoords,navigateThroughBestLabel,
+                    bestFittingLabel,loop_found, loop_points)
+
+        #set all parts of labeled branches as 0 which are not included in set of points anymore (were deleted from neuritecoords during reset to last decisive point)
+        neuriteCoordsImage = np.zeros_like(groupImage_branches_labeled)
+        neuriteCoordsImage[neuriteCoords[0],neuriteCoords[1]] = 1
+        groupImage_branches_labeled[neuriteCoordsImage != 1] = 0
+
+        groupImage_branches_labeled_tmp = groupImage_branches_labeled.astype(bool)
+        groupImage_branches_labeled_tmp = morph.remove_small_objects(groupImage_branches_labeled_tmp,min_size=2,connectivity=2)
+        groupImage_branches_labeled[groupImage_branches_labeled_tmp == 0] = 0
+
+        #delete parts in neurite coords image that were deleted in labeled branches
+        neuriteCoordsImage[(groupImage_branches_labeled_tmp == 0) & (groupImage_branches_labeled > 0)] = 0
+        neuriteCoords = np.where(neuriteCoordsImage == 1)
+
+        groupImage_branches_labeled = groupImage_branches_labeled_tmp
+
+        labelsAroundPoint, branchPointImage = sortPoints.getLabelsAroundPoint(groupImage_branches_labeled,neuriteCoords,copy.copy(nearestNeighbor),groupImage)
+        nbOfLabelsAroundPoint = len(labelsAroundPoint)
+
+
+        if nbOfLabelsAroundPoint <= 3:
+            if (len(neighbors) > 1):
+                decisivePoints = sortPoints.appendDecisivePoint(decisivePoints,(len(sortedPoints)-1))
+
+            return (nearestNeighbor,distance,decisivePoints,isDecisivePoint,
+                    sortedPoints, neuriteCoords,navigateThroughBestLabel,
+                    bestFittingLabel,loop_found, loop_points)
+
+        labelsSorted = groupImage_branches_labeled[np.transpose(sortedPoints)[0],np.transpose(sortedPoints)[1]]
+        anyLabelNotSorted, nbLabelsSorted, labelsSorted = sortPoints.countLabelsAlreadySorted(labelsAroundPoint,labelsSorted)
+
+        if nbLabelsSorted > 1:
+
+            nearestNeighbor = []
+            if len(decisivePoints) > 0:
+
+                (sortedPoints,
+                 neuriteCoords,
+                 deletedSortedPoints) = sortPoints.deleteNeuriteCoords(neuriteCoords,
+                                                                       decisivePoints[-1]+1,
+                                                                       sortedPoints,False,[])
+                del decisivePoints[-1]
+
+            return (nearestNeighbor, distance, decisivePoints, isDecisivePoint,
+                    sortedPoints, neuriteCoords, navigateThroughBestLabel,
+                    bestFittingLabel, loop_found, loop_points)
+
+        if not (anyLabelNotSorted):
+            return (nearestNeighbor, distance, decisivePoints, isDecisivePoint,
+                    sortedPoints, neuriteCoords, navigateThroughBestLabel,
+                    bestFittingLabel, loop_found, loop_points)
+
+        distances = []
+        isDecisivePoint = True
+
+        (distances,
+         sortedPoints,
+         decisivePoints) = sortPoints.appendParamsOfNearestNeighbor(distances,
+                                                                    distance,
+                                                                    nearestNeighbor,
+                                                                    sortedPoints,
+                                                                    decisivePoints)
+        #for decisivePoint, check which label fits better (better average sum of intensities at each point)
+        (bestFittingLabel,
+         wrongLabels) = sortPoints.findBestFittingLabel(sortedPoints,
+                                                        groupImage_branches_labeled,
+                                                        sumIntensitieGroupImg,
+                                                        labelsAroundPoint,
+                                                        labelsSorted,
+                                                        branchPointImage,
+                                                        neuriteCoordsImage)
+
+        inTransitToBestLabel = True
+        branchPointCoords = np.where(branchPointImage == 1)
+        firstDevisivePointIndex = len(decisivePoints)
+
+        foundCorrectPoint = False
+        #traverse through branchPoint, finding the route to bestfittinglabel
+        while inTransitToBestLabel:
+            (distances,
+             sortedPoints,
+             decisivePoints,
+             branchPointCoords,
+             inTransitToBestLabel,
+             foundCorrectPoint) = sortPoints.navigateThroughBranchPoint(wrongLabels,
+                                                                        bestFittingLabel,
+                                                                        groupImage_branches_labeled,
+                                                                        distances,
+                                                                        sortedPoints,
+                                                                        decisivePoints,
+                                                                        branchPointCoords,
+                                                                        firstDevisivePointIndex,
+                                                                        foundCorrectPoint)
+            #initiate that two more px of bestfitting label will be added (to prevent going back into branchpoint, causing eternal loop)
+
+            if foundCorrectPoint:
+                navigateThroughBestLabel = True
+                inTransitToBestLabel = False
+
+        distance = distances
+        nearestNeighbor = sortedPoints[-1]
+
+        return (nearestNeighbor,distance,decisivePoints,isDecisivePoint,
+                sortedPoints, neuriteCoords,navigateThroughBestLabel,
+                bestFittingLabel,loop_found, loop_points)
 
     @staticmethod
     def appendDecisivePoint(decisivePoints,newDecisivePoint):
@@ -459,30 +532,6 @@ class sortPoints():
         #coords are only branchpoint coords
         #getneighbors -> getnearestneighbor -> if label in best: break / if label in wrong: go back
         currentPoint = sortedPoints[-1]
-        
-        
-#        if (len(sortedPoints) > 43) & (len(sortedPoints) < 46):
-##            print("best fitting label: {}".format(bestFittingLabel))
-##            print(wrongLabels)
-##            print("current point: {}".format(currentPoint))
-##            print("label current point: {}".format(groupImage_branches_labeled[currentPoint[0],currentPoint[1]]))
-#            branchPointImage = np.zeros_like(groupImage_branches_labeled)
-#            branchPointImage[branchPointCoords[0],branchPointCoords[1]] = 1
-#            branchPointImage = branchPointImage.astype(int)
-#            branchPointImage[currentPoint[0],currentPoint[1]] = 2
-#            crop = branchPointImage[currentPoint[0]-20:currentPoint[0]+20,currentPoint[1]-20:currentPoint[1]+20]
-#            
-#            plt.figure()
-#            plt.imshow(np.zeros((512,512)))
-#            plt.text(40,40,"best fitting label: {}".format(bestFittingLabel))
-#            
-#            plt.figure()
-#            plt.imshow(crop)
-#    #       
-#            crop = groupImage_branches_labeled_bw[currentPoint[0]-20:currentPoint[0]+20,currentPoint[1]-20:currentPoint[1]+20]
-#            
-#            plt.figure()
-#            plt.imshow(crop)
         
         inTransitToBestLabel = True
         neighbors, neighbors_inclDistantSortedPoints = sortPoints.getAllNeighborsAtMaxDistance(currentPoint,branchPointCoords,sortedPoints,1.5)
@@ -644,8 +693,7 @@ class sortPoints():
                 oneLabel_coords = np.where(currentBranchPointImage_addedArea_labeled == label)
                 closestOneLabelPoint = generalTools.getClosestPoint(oneLabel_coords,np.transpose(branchPoint_coords))
                 currentBranchPointImage_final[closestOneLabelPoint[0],closestOneLabelPoint[1]] = 1
-                
-             
+
         currentBranchPointImage_final = generalTools.uncropImage(currentBranchPointImage_final,borderVals2)
                 
         return currentBranchPointImage_final
@@ -654,7 +702,9 @@ class sortPoints():
 
 
     @staticmethod
-    def findBestFittingLabel(sortedPoints,groupImage_branches_labeled,sumIntensitieGroupImg,labelsAroundPoint,labelsSorted,branchPointImage,neuriteCoordsImage):
+    def findBestFittingLabel(sortedPoints,groupImage_branches_labeled,
+                             sumIntensitieGroupImg,labelsAroundPoint,
+                             labelsSorted,branchPointImage,neuriteCoordsImage):
         #check several of the last points for the first one to not be background to find starting label
         nbOfConsecutiveLabels = 0
         for a in range(1,21):
@@ -675,8 +725,7 @@ class sortPoints():
         
         startingLabelImage = np.zeros_like(groupImage_branches_labeled)
         startingLabelImage[groupImage_branches_labeled == startingLabel] = 1
-        
-#        generalTools.showThresholdOnImg(startingLabelImage,sumIntensitieGroupImg,3)
+
         bestIntensityDifference = np.nan
         bestFittingLabel = np.nan
         for label in labelsAroundPoint:
@@ -688,7 +737,10 @@ class sortPoints():
                     neighborLabelImage[groupImage_branches_labeled == label] = 1
                     minSizeOfBranch = 20
                     minSize = minSizeOfBranch
-                    neighborLabelImage = sortPoints.enlargeBranch(neighborLabelImage,copy.copy(branchPointImage),copy.copy(neuriteCoordsImage),copy.copy(sumIntensitieGroupImg),minSize)
+                    neighborLabelImage = sortPoints.enlargeBranch(neighborLabelImage,
+                                                                  copy.copy(branchPointImage),
+                                                                  copy.copy(neuriteCoordsImage),
+                                                                  copy.copy(sumIntensitieGroupImg),minSize)
 #                    generalTools.showThresholdOnImg(neighborLabelImage,sumIntensitieGroupImg,1)
                     neighborLabelIntensity = np.median(sumIntensitieGroupImg[neighborLabelImage == 1])
                     if neighborLabelIntensity > startingLabelIntensity:
@@ -699,10 +751,7 @@ class sortPoints():
                         bestLabel = True
                     elif intensityDifference < bestIntensityDifference:
                         bestLabel = True
-#                    generalTools.showThresholdOnImg(neighborLabelImage,sumIntensitieGroupImg,1)
-#                    plt.figure()
-#                    plt.imshow(np.zeros((512,512)))
-#                    plt.text(40,40,str(intensityDifference))
+
                     if bestLabel:
                         bestIntensityDifference = intensityDifference
                         bestFittingLabel = label
@@ -886,26 +935,10 @@ class sortPoints():
                     lastNbToDelete = maxContrastNb+additionalNbOfPxToDelete
                     
                 oneBranch_tmp = np.delete(oneBranch,range(firstNbToDelete,lastNbToDelete),axis = 0)
-#        
-#        if minFilopodiaLength > 0:
-#            plt.figure(figsize=(12,6))
-#            plt.plot(allContrast)
-####            plt.figure()
-####            plt.imshow(np.zeros((512,512)))
-####            plt.text(20,20,str(len(oneBranch)))
-####            plt.figure()
-####            plt.imshow(np.zeros((512,512)))
-####            plt.text(40,20,str(lastA))
-#            oneBranchImg = np.zeros_like(img)
-#            oneBranchImg[np.transpose(oneBranch)[0],np.transpose(oneBranch)[1]] = 1
-#            generalTools.showThresholdOnImg(oneBranchImg,img,2)
+
         if len(oneBranch) != len(oneBranch_tmp):
             oneBranch = [oneBranch, oneBranch_tmp]
-#        if minFilopodiaLength > 0:
-#            oneBranchImg = np.zeros_like(img)
-#            oneBranchImg[np.transpose(oneBranch)[0],np.transpose(oneBranch)[1]] = 1
-#            generalTools.showThresholdOnImg(oneBranchImg,img,1)
-        
+
         return oneBranch
 
 
@@ -1026,34 +1059,16 @@ class sortPoints():
             #if constructNeurite save all branches with sufficient differences from the longest branch as separate branch
             allLongBranches = []
             allLongBranches.append(longestBranch)
-            
-#            oneBranchCoords = np.transpose(longestBranch)
-#            oneBranchImg = np.zeros_like(img)
-#            oneBranchImg[oneBranchCoords[0],oneBranchCoords[1]] = 1
-#            generalTools.showThresholdOnImg(oneBranchImg,img,1)
-#        plt.figure()
-#        plt.figure()
-#        plt.figure()
-#        plt.figure()
-#        plt.figure()
+
         for oneBranch in deletedSortedPoints:
             if len(oneBranch) > branchLengthToKeep:
                 
                 #check how many pixels are in oneBranch which are not in longest branch
                 if constructNeurite:
-#                    oneBranchCoords = np.transpose(oneBranch)
-#                    oneBranchImg = np.zeros_like(img)
-#                    oneBranchImg[oneBranchCoords[0],oneBranchCoords[1]] = 1
-#                    generalTools.showThresholdOnImg(oneBranchImg,img,2)
                     #for constructneurite check for difference with each branch already added to longest branch array
                     addBranch = True
                     for longestBranch in allLongBranches:
                         addBranch_sub, difference = sortPoints.checkWhetherToAddBranch(oneBranch,longestBranch,branchLengthToKeep,allLongBranches,"two_way")
-#                        testimg = generalTools.getImageFromPoints(longestBranch,(512,512))
-#                        generalTools.showThresholdOnImg(testimg,img,1)
-#                        plt.figure()
-#                        plt.imshow(np.zeros((512,512)))
-#                        plt.text(40,40,len(difference))
                         if not addBranch_sub:
                             addBranch = False
                             break

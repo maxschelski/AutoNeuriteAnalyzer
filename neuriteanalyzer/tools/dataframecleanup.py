@@ -6,9 +6,9 @@ Created on Fri Jul  5 10:27:05 2019
 @author: schelskim
 """
 
-from tools.generaltools import generalTools
-from tools.analyzers import Analyzers
-from tools.neuriteconstructor import neuriteConstructor
+from .generaltools import generalTools
+from .analyzers import Analyzers
+from .neuriteconstructor import neuriteConstructor
 #from tools.dataframecleanup import DataframeCleanup
 
 

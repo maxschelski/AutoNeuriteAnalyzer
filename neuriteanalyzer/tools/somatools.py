@@ -4,9 +4,9 @@ Created on Fri Jul  5 13:47:17 2019
 
 @author: schelskim
 """
+from .generaltools import generalTools
 
 import numpy as np
-from tools.generaltools import generalTools
 from skimage import morphology as morph
 from scipy import ndimage
 from matplotlib import pyplot as plt
@@ -18,7 +18,9 @@ from skimage.morphology import disk
 class SomaTools():
 
     @staticmethod
-    def getSoma(preSoma,minSomaOverflow,somaExtractionFilterSize,cX,cY,img_thresholded,objectSizeToRemoveForSomaExtraction):
+    def getSoma(preSoma, minSomaOverflow, somaExtractionFilterSize,
+                img_thresholded, objectSizeToRemoveForSomaExtraction,
+                cX=None, cY=None):
         soma_base = ndimage.filters.gaussian_filter(preSoma,(somaExtractionFilterSize))
         preSoma = preSoma > 0
         preSoma = preSoma.astype(int)
@@ -66,7 +68,7 @@ class SomaTools():
         alternative_maxNbOfNewLabels = np.nan
         if len(np.unique(soma_labeled)) > 2:
             #if cX and cY were defined during thresholding from prototypic soma, use as reference to find soma 
-            if ~np.isnan(cX):
+            if type(cX) != type(None):
                 somaLabelPoint = generalTools.getClosestPoint(np.where(soma == True),[[cY,cX]])
                 somaLabel = soma_labeled[somaLabelPoint[0],somaLabelPoint[1]]
             else:

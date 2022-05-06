@@ -5,8 +5,8 @@ Created on Fri Jul  5 13:06:13 2019
 @author: schelskim
 """
 
-from tools.generaltools import generalTools
-from tools.sortpoints import sortPoints
+from .generaltools import generalTools
+from .sortpoints import sortPoints
 
 import numpy as np
 from skimage import morphology as morph
@@ -27,7 +27,9 @@ from scipy.ndimage.filters import gaussian_filter as gaussian
 class connectNeurites():
 
     @staticmethod
-    def start(islands,img,timeframe,neuronMid,somaBorder,maxRelDifferenceOfLengths,minBranchSize,minContrast,maxLocalConnectionContrast,distanceToCheck,backgroundVal):
+    def start(islands, img, timeframe, neuronMid, somaBorder,
+              maxRelDifferenceOfLengths, minBranchSize, minContrast,
+              maxLocalConnectionContrast, distanceToCheck, backgroundVal):
         
         cX = neuronMid[0]
         cY = neuronMid[1]
@@ -67,125 +69,153 @@ class connectNeurites():
             islandData = np.where(thisIslandForClearing == 1)
             restTimeframe = copy.copy(islands)
             restTimeframe[islandData[0],islandData[1]] = False
-            if(len(np.where(restTimeframe)[0]) == 0):
-                nbLabels = 1
-            else:
-                
-                #create border around island to select maximum intensity point in that border to start connection 
-                
-                islandBorder = ndimage.morphology.binary_dilation(thisIsland,disk(2))
-                islandBorder[thisIsland == 1] = 0
-                
-                #-----------UNCROP ---------------------
-                islandBorder = generalTools.uncropImage(islandBorder,borderVals)
-                thisIsland = generalTools.uncropImage(thisIsland,borderVals)
-                
-                islandBorderData = np.where(islandBorder == 1)
-                
-                #go through up to 6 points, to check if there is one point that can lead to a successfull connection
-                targetFound = False
-                for a in range(0,6):
-                    islandBorderMaxVal = np.max(imgForBorder[islandBorderData[0],islandBorderData[1]])
-                    
-                    imgForMaxInBorder = copy.copy(imgForBorder)
-                    imgForMaxInBorder[islandBorder != 1] = 0
-                    islandBorderMaxValPos = np.where(imgForMaxInBorder == islandBorderMaxVal)
-                    islandStart = [islandBorderMaxValPos[0][0],islandBorderMaxValPos[1][0]]
-                    
-                    #find minimal connection length by checking closest point which is not at an unusual angle from island
-                    minLength = connectNeurites.getMinimalDistanceOfIsland(restTimeframe,islandStart,thisIsland,somaBorder,islandData)
-                    
-                    testIslands = np.zeros_like(islands)
-                    testImg = copy.copy(img)
-                    testImg[thisIsland == 1] = backgroundVal*0.8
-                    currentPoint = islandStart
-                    connectionFound = False
-                    #construct connection by searching for maximum value in distance from currentpoint and going there next, repeat max. 100x
-                    for a in range(0,100):
-                        
-                        newPoint = connectNeurites.getNextMaxPoint(currentPoint,distanceToCheck,testImg)
 
-                        #remove all points surrounding the currentPoint
-                        dilation = 2
-                        for x in range(-dilation,dilation):
-                            for y in range(-dilation,dilation):
-                                if ((x != -dilation) | (y == 0)) & ((x != dilation) | (y == 0)) & ((x == 0) | (y != -dilation)) & ((x == 0) | (y != dilation)):
-                                    testImg[newPoint[0]+x,newPoint[1]+y] = backgroundVal*0.8
-                        
-                        testIslands[newPoint[0],newPoint[1]] = 1
-                        
-                        currentPoint = newPoint
-                        
-                        #if new point is within resttimeframe, a potentially successfull connection was found, check if it is successfull
-                        contrast = 0
-                        if restTimeframe[currentPoint[0],currentPoint[1]] == 1:
-                            #get maxpoint one more time to get connectedPoint
-                            connectionFound = True
-                            break
-                    
-                    if connectionFound:
-                        newPoint = connectNeurites.getNextMaxPoint(currentPoint,distanceToCheck,testImg)
-                        currentPoint = newPoint
-                        
-                        #get dilated whole island connection & skeletonized connection
-                        testIslands_dil, testIslands_skel = connectNeurites.refineIslandConnection(testIslands,thisIsland,labeledIslands,label,islandStart,islands,img)
-                        
-                        sortedPoints = [islandStart]
-                        allCoords = np.where(testIslands_skel == 1)
-                        
-                        sortedArray, length, allCoords = sortPoints.startSorting(allCoords,sortedPoints,0,minBranchSize,[],True,0)
-                        
-                        contrast = connectNeurites.getContrastOfConnection(sortedArray,0,len(sortedArray),img[(islands != 1) & (img != 0)],img)
-                        connectPoints = contrast > minContrast
-    #                            print("length of connection: {} / min length: {} / contrast: {}".format(length,minLength,contrast))
-                        additionalLength = 10
-                        if additionalLength > (minLength+dilationOfIsland):
-                            additionalLength = minLength+dilationOfIsland
-                        
-                        maxLength = ((minLength+dilationOfIsland) * maxRelDifferenceOfLengths) + additionalLength
-                        #test also if more than 5 points were excluded from the skeletonized image - indicates points going around the island to find target
-                        #in that case, middle part of skeleton is deleted due to fusion with island before skeletonization and subtraction afterwards
-                        if ((maxLength > length) | (connectPoints)) & (len(allCoords[0]) <= (len(sortedArray) + 5)):
-                            #if length first but array is too short, dont reconsider contrast, overwrite connectpoints
-                            if len(sortedArray) < 10:
-                                connectPoints = True
-                            else:
-                                start = len(sortedArray) - 8
-                                if start > 5:
-                                    start = 5
-                                img_forContrast = gaussian(img,2)
-                                
-                                #either the contrast of the whole connection or the local contrast is above set threshold value
-                                contrast = connectNeurites.getContrastOfConnection(sortedArray,start,len(sortedArray)-5,img_forContrast[(islands != 1) & (img != 0)],img_forContrast)
-                                connectPoints = contrast > minContrast
-                                
-                                if connectPoints:
-                                    img_forContrast = img_forContrast - backgroundVal * 0.9
-                                    start = len(sortedArray)-15
-                                    if start < 0:
-                                        start = 0
-                                    localContrast = connectNeurites.getContrastOfConnection(sortedArray,start,len(sortedArray)-5,img[currentPoint[0],currentPoint[1]],img_forContrast)
-                                    connectPoints = localContrast > 1/maxLocalConnectionContrast
-                            if connectPoints:
-                                targetFound = True
-                                #islands needed to be dilated before intensity based connection is drawn
-                                #therefore, draw connection line from non dilated island to beginning of intensity based connection
-                                islands[testIslands_dil == 1] = 1
-                                connections[testIslands_dil == 1] = 1
-                                
-                    if targetFound:
-                        break
-                    else:
-                        #remove current startpoint and surrounding, to iterate through next possibilities
-                        islandStartImg = np.zeros_like(img)
-                        islandStartImg[islandStart[0],islandStart[1]] = 1
-                        islandStartImg = ndimage.morphology.binary_dilation(islandStartImg,disk(4))
-                        imgForBorder[islandStartImg == 1] = 0
-                    
-                if not targetFound:
-                    islands[thisIsland == 1] = False
+            if(len(np.where(restTimeframe)[0]) == 0):
+                return
                 
-                labeledIslands,nbLabels = ndimage.label(islands,structure=[[1,1,1],[1,1,1],[1,1,1]])
+            #create border around island to select maximum intensity point in that border to start connection
+
+            islandBorder = ndimage.morphology.binary_dilation(thisIsland,disk(2))
+            islandBorder[thisIsland == 1] = 0
+
+            #-----------UNCROP ---------------------
+            islandBorder = generalTools.uncropImage(islandBorder,borderVals)
+            thisIsland = generalTools.uncropImage(thisIsland,borderVals)
+
+            islandBorderData = np.where(islandBorder == 1)
+
+            # go through up to 6 points, to check if there is one point
+            # that can lead to a successfull connection
+            targetFound = False
+            for a in range(0,6):
+                islandBorderMaxVal = np.max(imgForBorder[islandBorderData[0],islandBorderData[1]])
+
+                imgForMaxInBorder = copy.copy(imgForBorder)
+                imgForMaxInBorder[islandBorder != 1] = 0
+                islandBorderMaxValPos = np.where(imgForMaxInBorder == islandBorderMaxVal)
+                islandStart = [islandBorderMaxValPos[0][0],islandBorderMaxValPos[1][0]]
+
+                # find minimal connection length by checking closest point
+                # which is not at an unusual angle from island
+                minLength = connectNeurites.getMinimalDistanceOfIsland(restTimeframe,
+                                                                       islandStart,
+                                                                       thisIsland,
+                                                                       somaBorder,
+                                                                       islandData)
+
+                testIslands = np.zeros_like(islands)
+                testImg = copy.copy(img)
+                testImg[thisIsland == 1] = backgroundVal*0.8
+                currentPoint = islandStart
+                connectionFound = False
+                #construct connection by searching for maximum value in distance from currentpoint and going there next, repeat max. 100x
+                for a in range(0,100):
+
+                    newPoint = connectNeurites.getNextMaxPoint(currentPoint,distanceToCheck,testImg)
+
+                    #remove all points surrounding the currentPoint
+                    dilation = 2
+                    for x in range(-dilation,dilation):
+                        for y in range(-dilation,dilation):
+                            if (((x != -dilation) | (y == 0)) &
+                                    ((x != dilation) | (y == 0)) &
+                                    ((x == 0) | (y != -dilation)) &
+                                    ((x == 0) | (y != dilation))):
+                                testImg[newPoint[0] + x,
+                                        newPoint[1] + y] = backgroundVal*0.8
+
+                    testIslands[newPoint[0],newPoint[1]] = 1
+
+                    currentPoint = newPoint
+
+                    #if new point is within resttimeframe, a potentially successfull connection was found, check if it is successfull
+                    contrast = 0
+                    if restTimeframe[currentPoint[0],currentPoint[1]] == 1:
+                        #get maxpoint one more time to get connectedPoint
+                        connectionFound = True
+                        break
+
+                if connectionFound:
+                    newPoint = connectNeurites.getNextMaxPoint(currentPoint,distanceToCheck,testImg)
+                    currentPoint = newPoint
+
+                    #get dilated whole island connection & skeletonized connection
+                    testIslands_dil, testIslands_skel = connectNeurites.refineIslandConnection(testIslands,thisIsland,labeledIslands,label,islandStart,islands,img)
+
+                    sortedPoints = [islandStart]
+                    allCoords = np.where(testIslands_skel == 1)
+
+                    sortedArray, length, allCoords = sortPoints.startSorting(allCoords,sortedPoints,0,minBranchSize,[],True,0)
+
+                    contrast = connectNeurites.getContrastOfConnection(sortedArray,0,len(sortedArray),img[(islands != 1) & (img != 0)],img)
+                    connectPoints = contrast > minContrast
+#                            print("length of connection: {} / min length: {} / contrast: {}".format(length,minLength,contrast))
+                    additionalLength = 10
+                    if additionalLength > (minLength+dilationOfIsland):
+                        additionalLength = minLength+dilationOfIsland
+
+                    maxLength = ((minLength+dilationOfIsland) * maxRelDifferenceOfLengths) + additionalLength
+                    #test also if more than 5 points were excluded from the skeletonized image - indicates points going around the island to find target
+                    #in that case, middle part of skeleton is deleted due to fusion with island before skeletonization and subtraction afterwards
+                    if not (((maxLength > length) | (connectPoints)) &
+                            (len(allCoords[0]) <= (len(sortedArray) + 5))):
+                        continue
+
+                    #if length first but array is too short, dont reconsider contrast, overwrite connectpoints
+                    if len(sortedArray) < 10:
+                        connectPoints = True
+                    else:
+                        start = len(sortedArray) - 8
+                        if start > 5:
+                            start = 5
+                        img_forContrast = gaussian(img,2)
+
+                        #either the contrast of the whole connection or the local contrast is above set threshold value
+                        contrast = connectNeurites.getContrastOfConnection(sortedArray,
+                                                                           start,
+                                                                           len(sortedArray)-5,
+                                                                           img_forContrast[(islands != 1) &
+                                                                                           (img != 0)],
+                                                                           img_forContrast)
+                        connectPoints = contrast > minContrast
+
+                        if connectPoints:
+                            img_forContrast = img_forContrast - backgroundVal * 0.9
+                            start = len(sortedArray)-15
+                            if start < 0:
+                                start = 0
+                            localContrast = connectNeurites.getContrastOfConnection(sortedArray,
+                                                                                    start,
+                                                                                    len(sortedArray)-5,
+                                                                                    img[currentPoint[0],
+                                                                                        currentPoint[1]],
+                                                                                    img_forContrast)
+                            connectPoints = localContrast > 1/maxLocalConnectionContrast
+
+                    if connectPoints:
+                        targetFound = True
+                        # islands needed to be dilated before intensity
+                        # based connection is drawn
+                        # therefore, draw connection line from non dilated island
+                        # to beginning of intensity based connection
+                        islands[testIslands_dil == 1] = 1
+                        connections[testIslands_dil == 1] = 1
+
+                if targetFound:
+                    break
+                else:
+                    # remove current startpoint and surrounding,
+                    # to iterate through next possibilities
+                    islandStartImg = np.zeros_like(img)
+                    islandStartImg[islandStart[0],islandStart[1]] = 1
+                    islandStartImg = ndimage.morphology.binary_dilation(islandStartImg,
+                                                                        disk(4))
+                    imgForBorder[islandStartImg == 1] = 0
+
+            if not targetFound:
+                islands[thisIsland == 1] = False
+
+            labeledIslands,nbLabels = ndimage.label(islands,structure=[[1,1,1],[1,1,1],[1,1,1]])
         return connections
     
     @staticmethod

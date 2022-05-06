@@ -5,9 +5,9 @@ Created on Fri Jul  5 09:51:49 2019
 @author: schelskim
 """
 
-from tools.sortpoints import sortPoints
-from tools.somatools import SomaTools
-from tools.generaltools import generalTools
+from .sortpoints import sortPoints
+from .somatools import SomaTools
+from .generaltools import generalTools
 
 
 import numpy as np
@@ -42,8 +42,6 @@ class ThresholdNeuron:
         sortedInts = np.sort(Ints)
         thresholdVal = np.nan
         
-        
-        
         if starting_threshold > 0:
             percentile = starting_threshold
             thresholdVal = ThresholdNeuron.getValueOfPercentile(sortedInts,percentile)
@@ -56,13 +54,11 @@ class ThresholdNeuron:
             img_for_threshold_edge = ThresholdNeuron.getEdgeImage(img,
                                                                   openingForThresholdEdge,
                                                                   medianForThresholdEdge)
-    
             #threshold edge image using histogram based thresholding
             sortedInts = np.sort(img_for_threshold_edge.ravel())
             MAX = np.max(sortedInts[0:int(np.round(len(sortedInts)*0.999,0))])
             allBins = np.logspace(np.log10(0.1),np.log10(MAX),num=25)
             edgeThresh = otsu(img_for_threshold_edge)
-            
             
             if len(np.where(mask > 0)[0]) > 0:
                 #DOES THE MASK WORK IN THE CURRENT SYSTEM?
@@ -70,41 +66,70 @@ class ThresholdNeuron:
                 
             #check if any threshold was found, if not don't continue
             if np.isnan(edgeThresh):
-                print("edge threshold didnt work...")
+                print("WARNING: Edge threshold did not work.")
                 thresholdVal = np.nan
                 threshold_percentile = np.nan
                 img_filtered = np.zeros_like(img)
             else:
                 img_edges = img_for_threshold_edge > edgeThresh
+
+                plt.imshow(img_edges)
                 
-                img_edges,fillingSuccessfull = ThresholdNeuron.fillSomaFromEdges(img_edges,grainSizeToRemove,objectSizeToRemoveForSomaExtraction)
-                
-                
+                img_edges,fillingSuccessfull = ThresholdNeuron.fillSomaFromEdges(img_edges,
+                                                                                 grainSizeToRemove,
+                                                                                 objectSizeToRemoveForSomaExtraction)
+
                 #if thresholding & filling of edges didnt work, try more conservative thresholding
                 if (len(np.where(img_edges == 1)[0]) == 0) | (not fillingSuccessfull):
-                    edgeThresh = ThresholdNeuron.getInitialThresholdValue(img_for_threshold_edge,allBins,nb1Dbins,True)
+                    edgeThresh = ThresholdNeuron.getInitialThresholdValue(img_for_threshold_edge,
+                                                                          allBins,
+                                                                          nb1Dbins,
+                                                                          threshold_level="high",
+                                                                          smoothenHistogram=True)
                     img_edges = img_for_threshold_edge > edgeThresh
-                    img_edges,fillingSuccessfull = ThresholdNeuron.fillSomaFromEdges(img_edges,grainSizeToRemove,objectSizeToRemoveForSomaExtraction)
+                    img_edges,fillingSuccessfull = ThresholdNeuron.fillSomaFromEdges(img_edges,
+                                                                                     grainSizeToRemove,
+                                                                                     objectSizeToRemoveForSomaExtraction)
+                    print( "filling?", fillingSuccessfull)
+                    plt.imshow(img_edges)
                 
                 if len(np.where(img_edges == 1)[0]) == 0:
-                    print("initial threshold of edges didn't work")
+                    print("WARNING: Initial threshold of edges did not work.")
                     img_filtered = img
                 else:
                     Ints = img[img >0].ravel()
         
-                    img_threshold, percentile, thresholdVal, cX, cY, Ints, sortedInts = ThresholdNeuron.getThresholdBasedOnSomaEdge(img,img_edges,minSomaOverflow,somaExtractionFilterSize,objectSizeToRemoveForSomaExtraction,maxToleratedSomaOverflowRatio,closingForPresoma)
+                    (img_threshold, 
+                     percentile, 
+                     thresholdVal, 
+                     cX, cY, Ints, 
+                     sortedInts) = ThresholdNeuron.getThresholdBasedOnSomaEdge(img,
+                                                                               img_edges,
+                                                                               minSomaOverflow,
+                                                                               somaExtractionFilterSize,
+                                                                               objectSizeToRemoveForSomaExtraction,
+                                                                               maxToleratedSomaOverflowRatio,
+                                                                               closingForPresoma)
                     if np.isnan(thresholdVal):
                         print("initial threshold didn't work")
                         img_filtered = img
         
         if not np.isnan(percentile):
             #changed last parameter from imgOfWholeNeuron to img_threshold
-            nbOfLabels,nbPixHoles,lastImg,thresholdVal = ThresholdNeuron.evalThreshold(img,Ints,sortedInts,percentile,grainSizeToRemove,img_threshold)
-           
-#    
+            nbOfLabels,nbPixHoles,lastImg,thresholdVal = ThresholdNeuron.evalThreshold(img,Ints,
+                                                                                       sortedInts,
+                                                                                       percentile,
+                                                                                       grainSizeToRemove,
+                                                                                       img_threshold)
+            
                 #define one soma area that will not be included in skeleton analysis
-            soma,cX,cY,lastImg_clean = ThresholdNeuron.getSomaFromThresholdedImage(lastImg,minSomaOverflow,somaExtractionFilterSize,cX,cY,objectSizeToRemoveForSomaExtraction,closingForPresoma)
-           
+            soma,cX,cY,lastImg_clean = ThresholdNeuron.getSomaFromThresholdedImage(lastImg,
+                                                                                   minSomaOverflow,
+                                                                                   somaExtractionFilterSize,
+                                                                                   cX,cY,
+                                                                                   objectSizeToRemoveForSomaExtraction,
+                                                                                   closingForPresoma)
+            
             #if no soma was found, then cX and cY are nan
             if np.isnan(cX) | (len(np.where(soma == 1)[0]) == 0):
                 print("no soma was found")
@@ -114,7 +139,22 @@ class ThresholdNeuron:
                 cX = np.nan
                 cY = np.nan
             else:
-                img_filtered, img_filtered_forBackgound, thresholdVal,threshold_percentile = ThresholdNeuron.refineThreshold(img,percentile,lastImg,lastImg_clean,copy.copy(cX),copy.copy(cY),soma,Ints,sortedInts,maxThresholdChange,percentileChangeForThreshold,dilationForOverlap,overlapMultiplicator,minBranchSize,grainSizeToRemove)   
+                (img_filtered, 
+                 img_filtered_forBackgound, 
+                 thresholdVal,threshold_percentile) = ThresholdNeuron.refineThreshold(img,
+                                                                                      percentile,
+                                                                                      lastImg,
+                                                                                      lastImg_clean,
+                                                                                      copy.copy(cX),
+                                                                                      copy.copy(cY),
+                                                                                      soma,Ints,
+                                                                                      sortedInts,
+                                                                                      maxThresholdChange,
+                                                                                      percentileChangeForThreshold,
+                                                                                      dilationForOverlap,
+                                                                                      overlapMultiplicator,
+                                                                                      minBranchSize,
+                                                                                      grainSizeToRemove)   
                         
         if not np.isnan(thresholdVal):
             backgroundVal = np.mean(img[(img_filtered_forBackgound == 0) & (img != 0)])
@@ -151,7 +191,11 @@ class ThresholdNeuron:
         preSoma = ndimage.morphology.binary_closing(img_thresholded,disk(closingForPresoma))
         preSoma = preSoma.astype(np.uint8)
         preSoma[preSoma > 0] = 255
-        soma, img_thresholded = SomaTools.getSoma(preSoma,minSomaOverflow,somaExtractionFilterSize,cX,cY,img_thresholded,objectSizeToRemoveForSomaExtraction)
+        soma, img_thresholded = SomaTools.getSoma(preSoma,
+                                                  minSomaOverflow,
+                                                  somaExtractionFilterSize,
+                                                  cX,cY,img_thresholded,
+                                                  objectSizeToRemoveForSomaExtraction)
 #        soma = ndimage.binary_dilation(soma,disk(self.somaExtractionFilterSize/6),iterations=12)
         
         #----------------UNCROP IMAGES
@@ -263,7 +307,18 @@ class ThresholdNeuron:
         return img_edges,fillingSuccessfull
     
     @staticmethod
-    def getInitialThresholdValue(img,allBins,nb1Dbins,smoothenHistogram=False):
+    def getInitialThresholdValue(img, allBins, nb1Dbins, threshold_level="high",
+                                 smoothenHistogram=False):
+        """
+
+        :param img:
+        :param allBins:
+        :param nb1Dbins:
+        :param threshold_level: String; Will device the threshold level
+                                "High", "medium" or "low"
+        :param smoothenHistogram:
+        :return:
+        """
         #calculate bin size in x and y direction
         xBin = int(np.round(img.shape[0]/nb1Dbins,0))
         yBin = int(np.round(img.shape[1]/nb1Dbins,0))
@@ -291,31 +346,26 @@ class ThresholdNeuron:
                     if len(minimum) > 1:
                         #randomly sometimes the one of the two first bins would be the chosen one -> always too early!
                         minimumVal = partHisto[1][minimum[-1]]
-#                        print(minimumVal)
-                        
                         allMinVals.append(minimumVal)
-    #                    plt.figure()
-    #                    partImgThresh = partImg > minimumVal
-    #                    plt.imshow(partImgThresh)
-#                    plt.figure()
-#                    plt.hist(partInts,log=True,bins=allBins)
-#        print(np.median(allMinVals))
-#        
-#        print(np.mean(allMinVals))
-        #take second smallest of the locally determined thresholdvalues (thereby exclude outliers)
-#        print(allMinVals)
+
+
+        thresh_level_id = {"high":2,
+                           "medium":1,
+                           "low":0}
+        # take xth smallest of the locally determined thresholdvalues
+        # (higher indexes exclude more outlier)
         if len(allMinVals) > 0:
             sortedMinVals = np.sort(allMinVals)
             if len(allMinVals) > 2:
-                    #choose third value in all min values to ignore very low values
-                    newThresholdVal = sortedMinVals[2]
+                    newThresholdVal = sortedMinVals[thresh_level_id[threshold_level]]
             elif len(allMinVals) > 1:
-                newThresholdVal = sortedMinVals[1]
+                id = min(1, thresh_level_id[threshold_level])
+                newThresholdVal = sortedMinVals[id]
             else:
                 newThresholdVal = sortedMinVals[0]
         else:
             newThresholdVal = np.nan
-        return newThresholdVal    
+        return newThresholdVal
  
     @staticmethod
     def getThresholdBasedOnSomaEdge(img,img_edges,minSomaOverflow,somaExtractionFilterSize,objectSizeToRemoveForSomaExtraction,maxToleratedSomaOverflowRatio,closingForPresoma):

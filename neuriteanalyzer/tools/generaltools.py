@@ -86,6 +86,11 @@ class generalTools():
     
     @staticmethod
     def getMidCoords(image):
+        """
+
+        :param image: Array of type uint8
+        :return:
+        """
         moments = cv2.moments(image)
         cX = int(moments["m10"] / moments["m00"])
         cY = int(moments["m01"] / moments["m00"])

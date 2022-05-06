@@ -5,15 +5,15 @@ Created on Fri Sep  8 16:17:25 2017
 @author: Max
 """
 
-from tools.neuriteconstructor import neuriteConstructor
-from tools.thresholdneuron import ThresholdNeuron
-from tools.analyzers import Analyzers
-from tools.dataframecleanup import DataframeCleanup
-from tools.sortpoints import sortPoints
-from tools.somatools import SomaTools
-from tools.connectneurites import connectNeurites
-from tools.generaltools import generalTools
-from tools.separateneurites import SeparateNeurites
+from .tools.neuriteconstructor import neuriteConstructor
+from .tools.thresholdneuron import ThresholdNeuron
+from .tools.analyzers import Analyzers
+from .tools.dataframecleanup import DataframeCleanup
+from .tools.sortpoints import sortPoints
+from .tools.somatools import SomaTools
+from .tools.connectneurites import connectNeurites
+from .tools.generaltools import generalTools
+from .tools.separateneurites import SeparateNeurites
 
 
 import sys
@@ -49,15 +49,25 @@ from scipy.ndimage import filters
 
 class NeuriteAnalyzer():
 
-    def __init__(self,path,skelChannel,analysisChannel,folders,conditions,cpuCores,multiThreading=False,continueAnalysis=False,create_skeleton=True,always_clean_dataframe=False,always_re_clean_dataframes=False,always_save_skeletons=False,always_save_completed_skeletons=False,continue_with_incomplete_analysis=False,analyze_intensities=True,first_timepoint_to_analyze=1):
+    def __init__(self,path="",skelChannel=None,image=None, image_thresh=None,
+                 analysisChannel=None,folders="",conditions=None,
+                 cpuCores=1,multiThreading=False, 
+                 continueAnalysis=False,create_skeleton=True,
+                 always_clean_dataframe=False,always_re_clean_dataframes=False,
+                 always_save_skeletons=False,
+                 always_save_completed_skeletons=False,
+                 continue_with_incomplete_analysis=False,
+                 analyze_intensities=True,first_timepoint_to_analyze=1):
 
         #how many um per pixel
         self.UMperPX = 0.22
 
-
         #---------------------GENERAL-------------------------
         #necessary for setting large strings of arrays in dataframe!
         self.folders = folders
+        self.timePoint = 1
+        self.timeframe = image
+        self.timeframe_thresholded = image_thresh
         self.conditions = conditions
         self.continueAnalysis = continueAnalysis
         self.create_skeleton = create_skeleton
@@ -69,6 +79,9 @@ class NeuriteAnalyzer():
         self.continue_with_incomplete_analysis = continue_with_incomplete_analysis
         self.first_timepoint_to_analyze = first_timepoint_to_analyze
         np.set_printoptions(threshold=sys.maxsize)
+
+
+        self.label_structure = [[1,1,1],[1,1,1],[1,1,1]]
 
         sys.setrecursionlimit(10**5)
         warnings.filterwarnings("once")
@@ -195,9 +208,6 @@ class NeuriteAnalyzer():
         #minimal contrast allowed during iterations of finding filopodia
         self.minAllowedContrastForFindingFilopodia = 0.8
 
-
-
-
         #---------------------CONNECT NEURITES-------------------------
         #maximum allowed fold difference of length for connecting islands when comparing distance to closest point and intensity based found distance
         self.maxRelDifferenceOfLengths = 1.6+0.1
@@ -258,8 +268,8 @@ class NeuriteAnalyzer():
 
         #---------------------INITIATE PARAMETERS-------------------------
         #x and y coordinates of mid point of soma
-        self.cX = np.nan
-        self.cY = np.nan
+        self.cX = None
+        self.cY = None
         self.last_total_nb_branchpoints = np.nan
         self.optimalThreshold = np.nan
         self.deletedSortedPoints = []
@@ -267,7 +277,8 @@ class NeuriteAnalyzer():
         self.overlappingOriginsColumns = ('newNeuriteNb','date','experiment','neuron','channel','time','origin','branch','x','y','overlap')
         self.possibleOriginsColumns = ('origin','branch','start_branch','x','y','gain_x','gain_y','loss_x','loss_y','pxdifference','diffRatio','pxSimilar','avIntOfPoints')
         self.allNeuritesColumns = ('date','experiment','neuron','channel','time','origin','branch','start_branch','start','end','pxdifference','diffRatio','pxSimilar','neuronMid','x','y','gain_x','gain_y','loss_x','loss_y','length','overlap','threshold','avIntOfPoints')
-
+        self.allNeurites = pd.DataFrame()
+        self.backgroundVal = np.nan
 
     def convertAllConstants(self):
 
@@ -467,8 +478,6 @@ class NeuriteAnalyzer():
             all_neurites['loss_x'] = all_neurites['loss_x'].apply(Analyzers.stringToNbArray)
             all_neurites['loss_y'] = all_neurites['loss_y'].apply(Analyzers.stringToNbArray)
         return all_neurites
-
-
 
 
     def isolateBranchInMostTimeframesPerOrigin(self,allNeurites):
@@ -675,181 +684,336 @@ class NeuriteAnalyzer():
         return self.allNeurites
 
 
+    def threshold_neuron(self, image=None, mask=None, starting_threshold=0):
 
-    def processTimePoint(self,imagePath,timePoint,maskImData_thresh,maskSet,starting_threshold= 0):
+        # use supplied image by default
+        # otherwise use image of neuriteanalyzer object
+        if type(image) == type(None):
+            image = self.timeframe
+
+        image = median(image, disk(self.imgMedianFilterSize))
+        self.timeframe = image
+
+        if type(mask) == type(None):
+            mask = np.zeros_like(image)
+        
+        neuron_nb = 0
+            
+        output = ThresholdNeuron.start(image,self.cX,self.cY,
+                                       self.grainSizeToRemove,
+                                       self.dilationForOverlap,
+                                       self.overlapMultiplicator,
+                                       neuron_nb,self.minEdgeVal,
+                                       self.minBranchSize,
+                                       self.percentileChangeForThreshold, 
+                                       self.maxThresholdChange,
+                                       self.minSomaOverflow,
+                                       self.somaExtractionFilterSize,
+                                       self.maxToleratedSomaOverflowRatio,
+                                       self.nb1Dbins,
+                                       self.minNbOfPxPerLabel,
+                                       self.objectSizeToRemoveForSomaExtraction,
+                                       self.distanceToCover,
+                                       self.filterBackgroundPointsFactor,
+                                       self.openingForThresholdEdge,
+                                       self.medianForThresholdEdge,
+                                       self.closingForPresoma,
+                                       mask,
+                                       starting_threshold)
+
+        (self.timeframe_thresholded,
+         self.optimalThreshold, 
+         self.threshold_percentile,
+         self.backgroundVal, 
+         self.cX,self.cY) = output
+
+        self.optimalThreshold = self.optimalThreshold + self.backgroundVal
+        
+        return None
+            
+    def get_soma(self):
+        timeframe_invMask = self.timeframe_thresholded.astype(np.uint8)
+        timeframe_invMask[timeframe_invMask > 0] = 255
+        nbOfLabels = 2
+        #extract soma and threshold image
+        (self.timeframe_soma,
+         self.timeframe_thresholded) = SomaTools.getSoma(timeframe_invMask,
+                                                       self.minSomaOverflow,
+                                                       self.somaExtractionFilterSize,
+                                                       self.timeframe_thresholded,
+                                                       self.objectSizeToRemoveForSomaExtraction,
+                                                      self.cX, self.cY)
+
+        # dilate soma a little bit to account for soma which are a bit soo small (leave some border of the thresholded soma)
+        timeframe_somaLabels, nbOfLabels = ndimage.label(self.timeframe_soma,
+                                                         structure=
+                                                         [[1, 1, 1], [1, 1, 1],
+                                                          [1, 1, 1]])
+        timeframe_soma_forMid = np.zeros_like(self.timeframe_thresholded,
+                                              dtype=np.uint8)
+        timeframe_soma_forMid[self.timeframe_soma == True] = 1
+
+        self.cX, self.cY = generalTools.getMidCoords(timeframe_soma_forMid)
+
+        # isolate middle region as soma
+        if timeframe_somaLabels[self.cY, self.cX] == 0:
+            allSomaCoords = np.where(self.timeframe_soma == 1)
+            closestSomaPoint = generalTools.getClosestPoint(allSomaCoords,
+                                                            [[self.cY, self.cX]])
+            somaLabel = timeframe_somaLabels[closestSomaPoint[0],
+                                             closestSomaPoint[1]]
+        else:
+            somaLabel = timeframe_somaLabels[self.cY, self.cX]
+
+        self.timeframe_soma[timeframe_somaLabels != somaLabel] = False
+
+        self.timeframe_somaborder = morph.binary_dilation(self.timeframe_soma,
+                                                          morph.square(3))
+        self.timeframe_somaborder[self.timeframe_soma == True] = False
+
+
+    def connect_islands(self):
+        # remove pixel border around image - can lead to confusion in connectislands algorithm if not connected to neurite
+        self.timeframe_thresholded[0:2, :] = False
+        self.timeframe_thresholded[:, 0:2] = False
+        self.timeframe_thresholded[self.timeframe_thresholded.shape[0] - 3:
+                                self.timeframe_thresholded.shape[0] - 1, :] = False
+        self.timeframe_thresholded[:, self.timeframe_thresholded.shape[1] - 3:
+                                   self.timeframe_thresholded.shape[1] - 1] = False
+
+        # dilation important pre processing step for connecting islands, otherwise halo around thresholded area misleads connection
+        self.timeframe_thresholded = morph.remove_small_objects(
+            self.timeframe_thresholded, 5, 2)
+
+        # steps of connecting islands, if a low intensity part in the middle was left out before (also to reconnect cut parts by cutter)
+        timeframe_islands = copy.copy(self.timeframe_thresholded)
+        # check whether size of all neurites together is at least as big as the minimum branch size
+        timeframe_islands_test = morph.skeletonize(timeframe_islands)
+        timeframe_islands_test[self.timeframe_soma] = False
+
+        if (len(np.where(timeframe_islands_test == 1)[0]) <=
+                self.minBranchSize):
+            return
+
+        # fill in gaps in neurites
+        # that might have happened during thresholding
+        timeframe_islands = connectNeurites.start(timeframe_islands,
+                                                  self.timeframe,
+                                                  self.timeframe_thresholded,
+                                                  [self.cX, self.cY],
+                                                  self.timeframe_somaborder,
+                                                  self.maxRelDifferenceOfLengths,
+                                                  self.minBranchSize,
+                                                  self.minContrast,
+                                                  self.maxLocalConnectionContrast,
+                                                  self.distanceToCheck,
+                                                  self.backgroundVal)
+
+        self.timeframe_thresholded[timeframe_islands == True] = True
+
+    def remove_not_connected_to_soma_from_neurites(self):
+        # remove soma from neurites image
+        timeframe_labeled,_ = ndimage.label(self.timeframe_thresholded,
+                                            structure=self.label_structure)
+        self.timeframe_thresholded[timeframe_labeled !=
+                                   timeframe_labeled[self.cY,self.cX]] = 0
+
+    def remove_soma_from_neurites(self):
+        # remove soma from neurites image
+        timeframe_neurites_labeled,_ = ndimage.label(self.timeframe_neurites,
+                                                     structure=self.label_structure)
+        self.timeframe_neurites[timeframe_neurites_labeled ==
+                                timeframe_neurites_labeled[self.cY,self.cX]] = 0
+
+    def separate_neurites(self, separate_neurites_by_opening=True):
+        output = SeparateNeurites.separateNeuritesBySomaDilation(self.timeframe_thresholded,
+                                                                self.timeframe_soma,
+                                                                self.maxSomaDilationForSeparation)
+        self.timeframe_neurites, self.timeframe_soma = output
+
+        if (len(np.where(self.timeframe_neurites > 0)[0]) <= 0) | \
+                (len(np.where(self.timeframe_soma > 0)[0]) <= 0):
+            return False, "Separating neurites failed."
+
+        if separate_neurites_by_opening:
+            self.timeframe_neurites = SeparateNeurites.separateNeuritesByOpening(self.timeframe_neurites,
+                                                                            self.maxNeuriteOpening,
+                                                                            self.timeframe_soma,
+                                                                            self.timeframe,
+                                                                            self.grainSizeToRemove,
+                                                                            self.contrastThresholdToRemoveLabel,
+                                                                            self.maxFractionToLoseByOpening)
+
+    def get_clean_thresholded_image(self, starting_threshold=0,
+                                    maskImData_thresh=None,
+                                    find_threshold=True,
+                                    connect_islands=True,
+                                    separate_neurites=True,
+                                    separate_neurites_by_opening=True):
+
+        if find_threshold:
+            self.threshold_neuron(mask=maskImData_thresh,
+                                  starting_threshold=starting_threshold)
+
+            if np.isnan(self.optimalThreshold):
+               return False, "Initial thresholding failed."
+
+        self.get_soma()
+
+        if len(np.where(self.timeframe_soma == 1)[0]) <= 0:
+            return False, "Finding soma failed."
+
+        if connect_islands:
+            self.connect_islands()
+
+        self.remove_not_connected_to_soma_from_neurites()
+
+        if separate_neurites:
+            self.separate_neurites(separate_neurites_by_opening)
+
+        self.remove_soma_from_neurites()
+
+        self.timeframe_neurites[self.timeframe_soma == True] = False
+
+        self.timeframe_neurites[self.timeframe_soma == True] = 1
+
+        # project changes made by separation on thresholded image
+        self.timeframe_thresholded[(self.timeframe_neurites == 0) &
+                                   (self.timeframe_soma == 0)] = 0
+
+        self.timeframe_thresholded_neurites = copy.copy(self.timeframe_thresholded)
+        self.timeframe_thresholded_neurites[self.timeframe_soma == 1] = 0
+
+        return True, ""
+
+    def get_neurite_skeletons(self):
+        self.timeframe_neurites = morph.skeletonize(self.timeframe_neurites)
+        self.timeframe_neurites[self.timeframe_soma == True] = False;
+
+    def processTimePoint(self, imagePath, timePoint, maskImData_thresh,
+                         maskSet, starting_threshold= 0):
         self.imagePath = imagePath
         self.timePoint = timePoint
         self.maskImData_thresh = maskImData_thresh
         self.maskSet = maskSet
         self.starting_threshold = starting_threshold
-        timeframe = io.imread(imagePath)
-        if(len(np.unique(timeframe)) > 1):
+        self.timeframe = io.imread(imagePath)
+        if(len(np.unique(self.timeframe)) <= 1):
+            return
 
-            #if mask is defined, subtract mask from image to isolate neuron from surrounding cells
-            if maskSet == False:
-                maskImData_thresh = np.zeros_like(timeframe)
+        #if mask is defined, subtract mask from image to isolate neuron from surrounding cells
+        if maskSet == False:
+            maskImData_thresh = np.zeros_like(self.timeframe)
 
-            timeframe = median(timeframe,disk(self.imgMedianFilterSize))
-            self.timeframe = timeframe
+        thresholding_worked = self.get_clean_thresholded_image(starting_threshold,
+                                                               maskImData_thresh)
 
+        if not thresholding_worked:
+            return
 
-            output = ThresholdNeuron.start(timeframe,self.cX,self.cY,
-                                           self.grainSizeToRemove,
-                                           self.dilationForOverlap,
-                                           self.overlapMultiplicator,
-                                           self.neuron,self.minEdgeVal,
-                                           self.minBranchSize,
-                                           self.percentileChangeForThreshold, 
-                                           self.maxThresholdChange,
-                                           self.minSomaOverflow,
-                                           self.somaExtractionFilterSize,
-                                           self.maxToleratedSomaOverflowRatio,
-                                           self.nb1Dbins,
-                                           self.minNbOfPxPerLabel,
-                                           self.objectSizeToRemoveForSomaExtraction,
-                                           self.distanceToCover,
-                                           self.filterBackgroundPointsFactor,
-                                           self.openingForThresholdEdge,
-                                           self.medianForThresholdEdge,
-                                           self.closingForPresoma,
-                                           maskImData_thresh,
-                                           starting_threshold)
-                    
-            (timeframe_neurites, 
-             self.optimalThreshold, 
-             self.threshold_percentile,
-             self.backgroundVal, 
-             self.cX,self.cY) = output
+        self.get_neurite_skeletons()
 
-            if ~np.isnan(self.optimalThreshold):
-                
-                self.contrast = np.mean(timeframe[timeframe_neurites == 1]) / self.backgroundVal
+        if len(np.where(self.timeframe_neurites == 1)[0]) <= self.minBranchSize:
+            return
 
-                self.optimalThreshold = self.optimalThreshold + self.backgroundVal
-                timeframe_invMask = timeframe_neurites.astype(np.uint8)
-                timeframe_invMask[timeframe_invMask > 0] = 255
-                nbOfLabels = 2
-                #extract soma and threshold image
-                timeframe_soma, timeframe_neurites = SomaTools.getSoma(timeframe_invMask,
-                                                                       self.minSomaOverflow,
-                                                                       self.somaExtractionFilterSize,
-                                                                       self.cX,self.cY,
-                                                                       timeframe_neurites,
-                                                                       self.objectSizeToRemoveForSomaExtraction)
+        self.process_neurites()
 
-                if len(np.where(timeframe_soma == 1)[0]) > 0:
+    def get_labeled_neurite_skeletons_based_on_thresholded_labels(self):
+        # get labels from thresholded image of neurites
+        (self.timeframe_thresholded_neurites_labeled,
+         _) = ndimage.label(self.timeframe_thresholded_neurites,
+                            structure=self.label_structure)
 
-                    #dilate soma a little bit to account for soma which are a bit soo small (leave some border of the thresholded soma)
-                    timeframe_somaLabels,nbOfLabels = ndimage.label(timeframe_soma,structure=
-                                                                    [[1,1,1],[1,1,1],[1,1,1]])
-                    timeframe_soma_forMid = np.zeros_like(timeframe)
-                    timeframe_soma_forMid[timeframe_soma == True] = 1
+        # then go through each label in the labeled image of neurite skeletons
+        # and set their label to the same label in the labeled thresolded image
+        (self.timeframe_neurites_labeled, _) = ndimage.label(self.timeframe_neurites,
+                                                            structure= self.label_structure)
+        new_timeframe_neurites_labeled = np.zeros_like(self.timeframe_neurites, dtype=np.uint8)
+        neurite_labels = np.unique(self.timeframe_neurites_labeled)
+        for neurite_label in neurite_labels:
+            # ignore the background label
+            if neurite_label == 0:
+                continue
+            # get the label of the labeled thresholded image of neurites
+            # at the position(s) of the skeleton of the current neurite
+            new_labels = np.unique(self.timeframe_thresholded_neurites_labeled[self.timeframe_neurites_labeled ==
+                                                                    neurite_label],
+                                   return_counts = True)
+            # create list of counts of nonzero labels
+            nonzero_label_counts = [new_labels[1][label_nb]
+                                    for label_nb, label in enumerate(new_labels[0])
+                                    if label != 0]
+            nonzero_labels = [label
+                              for label in new_labels[0]
+                              if label != 0]
 
+            max_count_nonzero_label_idx = np.argmax(nonzero_label_counts)
 
-                    self.cX, self.cY = generalTools.getMidCoords(timeframe_soma_forMid)
+            max_count_nonzero_label = nonzero_labels[max_count_nonzero_label_idx]
 
-                    #isolate middle region as soma
-                    if timeframe_somaLabels[self.cY,self.cX] == 0:
-                        allSomaCoords = np.where(timeframe_soma == 1)
-                        closestSomaPoint = generalTools.getClosestPoint(allSomaCoords,[[self.cY,self.cX]])
-                        somaLabel = timeframe_somaLabels[closestSomaPoint[0],closestSomaPoint[1]]
-                    else:
-                        somaLabel = timeframe_somaLabels[self.cY,self.cX]
+            new_timeframe_neurites_labeled[self.timeframe_neurites_labeled == neurite_label] = max_count_nonzero_label
 
-                    timeframe_soma[timeframe_somaLabels != somaLabel] = False
+        self.timeframe_neurites_labeled = new_timeframe_neurites_labeled
 
-                    timeframe_somaborder = morph.binary_dilation(timeframe_soma,morph.square(3))
-                    timeframe_somaborder[timeframe_soma == True] = False
-                    #remove pixel border around image - can lead to confusion in connectislands algorithm if not connected to neurite
-                    timeframe_neurites[0:2,:] = False
-                    timeframe_neurites[:,0:2] = False
-                    timeframe_neurites[timeframe_neurites.shape[0]-3:timeframe_neurites.shape[0]-1,:] = False
-                    timeframe_neurites[:,timeframe_neurites.shape[1]-3:timeframe_neurites.shape[1]-1] = False
+    def get_neurites(self):
 
-                    #dilation important pre processing step for connecting islands, otherwise halo around thresholded area misleads connection
-                    timeframe_neurites = morph.remove_small_objects(timeframe_neurites,5,2)
+        self.get_labeled_neurite_skeletons_based_on_thresholded_labels()
 
+        self.backgroundInt = np.mean(self.timeframe[self.timeframe_neurites_labeled == 0])
 
-                    #steps of connecting islands, if a low intensity part in the middle was left out before (also to reconnect cut parts by cutter)
-                    timeframe_islands = copy.copy(timeframe_neurites)
-                    #check whether size of all neurites together is at least as big as the minimum branch size
-                    timeframe_islands_test = morph.skeletonize(timeframe_islands)
-                    timeframe_islands_test[timeframe_soma] = False
-                    if (len(np.where(timeframe_islands_test == 1)[0]) > self.minBranchSize):
-                        #fill in gaps in neurites 
-                        #that might have happened during thresholding
-                        timeframe_islands = connectNeurites.start(timeframe_islands,
-                                                                  timeframe,
-                                                                  timeframe_neurites,
-                                                                  [self.cX,self.cY],
-                                                                  timeframe_somaborder,
-                                                                  self.maxRelDifferenceOfLengths,
-                                                                  self.minBranchSize,
-                                                                  self.minContrast,
-                                                                  self.maxLocalConnectionContrast,
-                                                                  self.distanceToCheck,
-                                                                  self.backgroundVal)
+        # if backgroundVal was not set (only done during thresholding,
+        # but if thresholded image is directly supplied, no thresholding is
+        # done)
+        # set the backgroundval was backgroundint (average value of not
+        # thresholded area)
+        if np.isnan(self.backgroundVal):
+            self.backgroundVal = self.backgroundInt
 
-                        timeframe_neurites[timeframe_islands == True] = True
+        maskToExcludeFilopodia = self.createMaskWithoutFilopodia(self.timeframe,
+                                                                 self.timeframe_thresholded)
 
-                        timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,structure=
-                                                                     [[1,1,1],[1,1,1],[1,1,1]])
-                        timeframe_neurites[timeframe_labeled != timeframe_labeled[self.cY,self.cX]] = 0
+        self.branchPointsCols = ('x','y','refs','used')
 
+        neurite_labels = np.unique(self.timeframe_neurites_labeled)
+        # get sorted points of all neurites in dict with label number of neurite
+        # as key
+        new_timeframe_neurites_labeled = np.zeros_like(self.timeframe_neurites,
+                                                       dtype=np.uint8)
+        all_sorted_points = {}
+        self.all_number_of_branchpoints = {}
 
-                        timeframe_thresholded = copy.copy(timeframe_neurites)
+        for group in neurite_labels:
+            if group == 0:
+                continue
 
-                        output = SeparateNeurites.separateNeuritesBySomaDilation(timeframe_neurites,
-                                                                                timeframe_soma,
-                                                                                timeframe_thresholded,
-                                                                                self.maxSomaDilationForSeparation)
-                        timeframe_neurites, timeframe_soma = output
+            group_image = self.get_skeleton_of_current_neurite(group)
 
-                        if (len(np.where(timeframe_neurites > 0)[0]) > 0) & (len(np.where(timeframe_soma > 0)[0]) > 0):
-                            timeframe_neurites = SeparateNeurites.separateNeuritesByOpening(timeframe_neurites,self.maxNeuriteOpening,timeframe_soma,timeframe,self.grainSizeToRemove,self.contrastThresholdToRemoveLabel,self.maxFractionToLoseByOpening)
+            # if there is only one value in the current group
+            # (no neurite with minimum neurite length left)
+            # then continue to next group
+            if len(np.unique(group_image)) == 1:
+                continue
 
+            (group_image,
+             group_image_branches) = self.remove_small_branches_at_end(group_image)
 
-                            timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,
-                                                                         structure=
-                                                                         [[1,1,1],[1,1,1],[1,1,1]])
-                            timeframe_neurites[timeframe_labeled != timeframe_labeled[self.cY,self.cX]] = 0
-                            timeframe_neurites[timeframe_soma == True] = False;
+            (total_nb_branchpoints,
+             group_image_branches_labeled) = self.get_nb_of_branchpoints(group_image_branches,
+                                                                        group_image)
+            self.all_number_of_branchpoints[group] = total_nb_branchpoints
 
+            sorted_points = self.get_sorted_neurite_points(group_image,
+                                                          group_image_branches_labeled,
+                                                          maskToExcludeFilopodia)
 
+            for sorted_points_branch in sorted_points:
+                new_timeframe_neurites_labeled[sorted_points_branch[:, 0],
+                                               sorted_points_branch[:, 1]] = group
 
-                            timeframe_neurites[timeframe_soma == True] = 1;
+            all_sorted_points[group] = sorted_points
 
-                            #project changes made by separation on thresholded image
-                            timeframe_thresholded[(timeframe_neurites == 0) & (timeframe_soma == 0)] = 0
-
-                            maskToExcludeFilopodia = self.createMaskWithoutFilopodia(timeframe,
-                                                                                     timeframe_thresholded)
-
-                            timeframe_neurites = morph.skeletonize(timeframe_thresholded)
-
-                            timeframe_neurites[timeframe_soma == True] = False;
-                            if len(np.where(timeframe_neurites == 1)[0]) > self.minBranchSize:
-
-                                timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,
-                                                                             structure=
-                                                                             [[1,1,1],[1,1,1],[1,1,1]])
-                                neuriteLabels = np.unique(timeframe_labeled)
-
-                                if len(self.allNeurites) > 0:
-                                    self.testNb = np.max(self.allNeurites.index.values)+1
-                                else:
-                                    self.testNb = 0
-                                self.branchPointsCols = ('x','y','refs','used')
-                                self.backgroundInt = np.mean(timeframe[timeframe_labeled == 0])
-
-                                for group in neuriteLabels:
-                                    self.processNeurite(timeframe,
-                                                        timeframe_neurites,
-                                                        group,timePoint,
-                                                        timeframe_soma,
-                                                        maskToExcludeFilopodia)
-
-
+        self.timeframe_neurites_labeled = new_timeframe_neurites_labeled
+        return all_sorted_points
 
     def createMaskWithoutFilopodia(self,timeframe,timeframe_thresholded):
         openingForSmoothenedNeuriteImg = 2
@@ -861,68 +1025,171 @@ class NeuriteAnalyzer():
         timeframe_edge_thresh = morph.binary_closing(timeframe_edge_thresh,disk(10))
         return timeframe_edge_thresh
 
+    def get_skeleton_of_current_neurite(self, group):
 
-    def processNeurite(self,timeframe,timeframe_neurites,
-                       group,timePoint,timeframe_soma,maskToExcludeFilopodia):
-        timeframe_labeled,nbOfLabels = ndimage.label(timeframe_neurites,structure=[[1,1,1],[1,1,1],[1,1,1]])
-        groupData = np.where(timeframe_labeled == group)
-        if((group > 0) & (len(groupData[0]) > self.minNeuriteLength)):
-            groupImage = copy.copy(timeframe_neurites)
-            groupImage[timeframe_labeled != group] = False
+        groupData = np.where(self.timeframe_neurites_labeled == group)
+        if((group < 0) | (len(groupData[0]) < self.minNeuriteLength)):
+            return np.zeros_like(self.timeframe_neurites)
 
+        # create binary image of the skeleton of the current neurite
+        groupImage = self.timeframe_neurites_labeled == group
 
-            #close small holes in neurite structure which lead to artifially complicated neurites
-            groupImage = morph.binary_closing(groupImage,disk(1))
-            groupImage = morph.skeletonize(groupImage)
+        #close small holes in neurite structure which lead to artifially complicated neurites
+        groupImage = morph.binary_closing(groupImage,disk(1))
+        groupImage = morph.skeletonize(groupImage)
+        return groupImage
 
-            groupImage_branches = copy.copy(groupImage)
-            #get all branch points of neurite, separate neurite by deleting branch points
+    def remove_small_branches_at_end(self, groupImage):
+        #get all branch points of neurite, separate neurite by deleting branch points
+        groupImage_branches, branchPoints = self.getBranchPoints(groupImage,
+                                                                 self.branchPointRadius,
+                                                                 self.branchPointRefRadius)
 
-            groupImage_branches, branchPoints = self.getBranchPoints(groupImage_branches,
-                                                                     self.branchPointRadius,
-                                                                     self.branchPointRefRadius)
+        (groupImage_branches_labeled,
+         nbOfBranches) = ndimage.label(groupImage_branches,
+                                       structure=self.label_structure)
 
-            groupImage_branches_labeled,nbOfBranches = ndimage.label(groupImage_branches,
-                                                                     structure=[[1,1,1],[1,1,1],[1,1,1]])
+        #create image of all branchpoints
+        group_image_branchpoints = np.zeros_like(groupImage_branches_labeled)
+        group_image_branchpoints[(groupImage_branches == 0) & (groupImage == 1)] = 1
+        (group_image_branchpoints_labeled,
+         total_nb_branchpoints) = ndimage.label(group_image_branchpoints,
+                                                structure=self.label_structure)
 
-            #create image of all branchpoints
-            group_image_branchpoints = np.zeros_like(groupImage_branches_labeled)
-            group_image_branchpoints[(groupImage_branches == 0) & (groupImage == 1)] = 1
-            group_image_branchpoints_labeled, total_nb_branchpoints = ndimage.label(group_image_branchpoints,structure=[[1,1,1],[1,1,1],[1,1,1]])
+        self.last_total_nb_branchpoints = total_nb_branchpoints
+        soma_labeled ,nb_labels_soma = ndimage.label(self.timeframe_soma,
+                                                     structure=self.label_structure)
 
-            self.last_total_nb_branchpoints = total_nb_branchpoints
-            soma_labeled ,nb_labels_soma = ndimage.label(timeframe_soma,structure=[[1,1,1],[1,1,1],[1,1,1]])
+        #remove all labels at end of branch (only connected to one branchpoint) which are too small
+        for label in np.unique(groupImage_branches_labeled):
+            one_label = np.zeros_like(groupImage_branches_labeled)
+            one_label[groupImage_branches_labeled == label] = 1
+            one_label_dilated = morph.binary_dilation(one_label,square(3))
+            #subtract 1 from number of branchpoints due to 0 in np.unique output (background)
+            nb_branchpoints = len(np.unique(group_image_branchpoints_labeled[one_label_dilated == 1]))-1
+            if nb_branchpoints < 2:
+                if len(np.where(one_label == 1)[0]) < self.branchLengthToKeep:
+                    #check if branch is attached to soma, if so, do not remove it
+                    neurite_plus_soma = copy.copy(self.timeframe_soma)
+                    neurite_plus_soma[one_label_dilated == 1] = 1
+                    (neurite_plus_soma_labeled,
+                     nb_labels_with_soma) = ndimage.label(neurite_plus_soma,
+                                                          structure=self.label_structure)
+                    #if same number of labels after adding neurite to soma, they are connected
+                    if nb_labels_with_soma > nb_labels_soma:
+                        groupImage[one_label == 1] = 0
+                        groupImage_branches_labeled[one_label == 1] = 0
+                        groupImage_branches[one_label == 1] = 0
+        return groupImage, groupImage_branches
 
-            #remove all labels at end of branch (only connected to one branchpoint) which are too small
-            for label in np.unique(groupImage_branches_labeled):
-                one_label = np.zeros_like(groupImage_branches_labeled)
-                one_label[groupImage_branches_labeled == label] = 1
-                one_label_dilated = morph.binary_dilation(one_label,square(3))
-                #subtract 1 from number of branchpoints due to 0 in np.unique output (background)
-                nb_branchpoints = len(np.unique(group_image_branchpoints_labeled[one_label_dilated == 1]))-1
-                if nb_branchpoints < 2:
-                    if len(np.where(one_label == 1)[0]) < self.branchLengthToKeep:
-                        #check if branch is attached to soma, if so, do not remove it
-                        neurite_plus_soma = copy.copy(timeframe_soma)
-                        neurite_plus_soma[one_label_dilated == 1] = 1
-                        neurite_plus_soma_labeled,nb_labels_with_soma = ndimage.label(neurite_plus_soma,structure=[[1,1,1],[1,1,1],[1,1,1]])
-                        #if same number of labels after adding neurite to soma, they are connected
-                        if nb_labels_with_soma > nb_labels_soma:
-                            groupImage[one_label == 1] = 0
-                            groupImage_branches_labeled[one_label == 1] = 0
-                            groupImage_branches[one_label == 1] = 0
+    def get_nb_of_branchpoints(self, groupImage_branches, groupImage):
+        (groupImage_branches,
+         branchPoints) = self.getBranchPoints(groupImage_branches,
+                                              self.branchPointRadius,
+                                              self.branchPointRefRadius)
 
+        (groupImage_branches_labeled,
+         nbOfBranches) = ndimage.label(groupImage_branches,
+                                       structure=self.label_structure)
 
-            groupImage_branches, branchPoints = self.getBranchPoints(groupImage_branches,self.branchPointRadius,self.branchPointRefRadius)
+        #create image of all branchpoints
+        group_image_branchpoints = np.zeros_like(groupImage_branches_labeled)
+        group_image_branchpoints[(groupImage_branches == 0) & (groupImage == 1)] = 1
+        (groupImage_branches_labeled, total_nb_branchpoints) = ndimage.label(group_image_branchpoints,
+                                                   structure=self.label_structure)
 
-            groupImage_branches_labeled,nbOfBranches = ndimage.label(groupImage_branches,structure=[[1,1,1],[1,1,1],[1,1,1]])
+        return total_nb_branchpoints, groupImage_branches_labeled
 
-            #create image of all branchpoints
-            group_image_branchpoints = np.zeros_like(groupImage_branches_labeled)
-            group_image_branchpoints[(groupImage_branches == 0) & (groupImage == 1)] = 1
-            group_image_branchpoints_labeled, total_nb_branchpoints = ndimage.label(group_image_branchpoints,structure=[[1,1,1],[1,1,1],[1,1,1]])
+    def get_sorted_neurite_points(self, groupImage,
+                                  groupImage_branches_labeled,
+                                  maskToExcludeFilopodia):
 
-            if (total_nb_branchpoints >= self.max_nb_of_branchpoints_before_overload):
+        sumIntensitieGroupImg = copy.copy(self.timeframe)
+        #subtract background from intensity image (timeframe)
+        background_val_int = int(np.round(self.backgroundVal,0))
+        timeframeForNeurite = copy.copy(self.timeframe)
+        timeframeForNeurite[timeframeForNeurite <
+                            int(np.round(self.backgroundVal,0))] = background_val_int
+        timeframeForNeurite = timeframeForNeurite - background_val_int
+        constructNeurite = True
+        distancePossible =False
+        keepLongBranches = True
+        length = 0
+        neuriteCoords = np.where(groupImage == 1)
+
+        closestNeuritePoints = self.getStartPointsOfNeurite(groupImage,
+                                                            copy.copy(self.timeframe_soma),
+                                                            self.timeframe)
+
+        sortedArrays = []
+        for closestNeuritePoint in closestNeuritePoints:
+            #don't remove filopodia in first time frame
+            if self.timePoint == 1:
+                min_filopodia_length = 0
+                max_filopodia_length = 1
+            else:
+                min_filopodia_length = self.minFilopodiaLength
+                max_filopodia_length = self.maxFilopodiaLength
+
+            (sortedArray_tmps,
+             length, _) = sortPoints.startSorting(neuriteCoords,
+                                                         [closestNeuritePoint],
+                                                         length,
+                                                         self.minBranchSize,
+                                                         [],
+                                                         keepLongBranches,
+                                                         self.branchLengthToKeep,
+                                                         distancePossible,
+                                                         constructNeurite,
+                                                         timeframeForNeurite,
+                                                         groupImage_branches_labeled,
+                                                         sumIntensitieGroupImg,
+                                                         groupImage,
+                                                         maskToExcludeFilopodia,
+                                                         min_filopodia_length,
+                                                         max_filopodia_length,
+                                                         self.minContrastFilopodia,
+                                                         self.minAllowedContrastForFindingFilopodia)
+            for oneSortedArray in sortedArray_tmps:
+                if len(oneSortedArray) > self.minNeuriteLength:
+                    sortedArrays.append(oneSortedArray)
+
+            if len(sortedArrays) == 0:
+                return []
+
+            # if more than one start point was present,
+            # remove resulting neurites which are too similar
+            if (len(sortedArrays) > 1):
+                sortedArrays = self.sortOutBranches(sortedArrays,
+                                                    sumIntensitieGroupImg)
+        return sortedArrays
+
+    def process_neurites(self,group,maskToExcludeFilopodia):
+
+        # rewrite function to create sets of sortedarrays
+        # for each neurite
+        # then process all neurites through neurite construction
+        # final structure should be ONE image which contains the thresholded
+        # neurites and a dict with sorted points of each neurite with a key
+        # of the label in the thresholded image
+
+        all_sorted_points = self.get_neurites()
+
+        if len(self.allNeurites) > 0:
+            self.testNb = np.max(self.allNeurites.index.values)+1
+        else:
+            self.testNb = 0
+
+        for group, sorted_points in all_sorted_points.items():
+            group_image = self.timeframe_neurites_labeled == group
+            total_nb_branchpoints = self.all_number_of_branchpoints[group]
+
+            # very high nb of branchpoints indicates suboptimal thresholding
+            # (too low threshold)
+            # start entire process over with higher threshold
+            if (total_nb_branchpoints >=
+                    self.max_nb_of_branchpoints_before_overload):
+
                 if self.starting_threshold > 0:
                     starting_threshold = self.starting_threshold * 0.8
                 else:
@@ -930,87 +1197,68 @@ class NeuriteAnalyzer():
                 self.processTimePoint(self.imagePath,
                                       self.timePoint,
                                       self.maskImData_thresh,
-                                      self.maskSet,starting_threshold)
-
-            #very high nb of branchpoints indicates suboptimal thresholding (too low threshold)
-            elif (len(np.where(groupImage == 1)[0]) > self.minNeuriteLength):
-
-                #calculate for each point of neurite total fluorescent intensity over full width of neurite
-                sumIntensitieGroupImg = copy.copy(timeframe)
-                #subtract background from intensity image (timeframe)
-
-                timeframeForNeurite = copy.copy(timeframe)
-                timeframeForNeurite[timeframeForNeurite < int(np.round(self.backgroundVal,0))] = int(np.round(self.backgroundVal,0))
-                timeframeForNeurite = timeframeForNeurite - int(np.round(self.backgroundVal,0))
-                constructNeurite = True
-                distancePossible =False
-                keepLongBranches = True
-                length = 0
-                neuriteCoords = np.where(groupImage == 1)
-
-                closestNeuritePoints = self.getStartPointsOfNeurite(groupImage,copy.copy(timeframe_soma),timeframe)
-
-                sortedArrays = []
-                for closestNeuritePoint in closestNeuritePoints:
-                    #don't remove filopodia in first time frame
-                    if timePoint == 1:
-                        min_filopodia_length = 0
-                        max_filopodia_length = 1
-                    else:
-                        min_filopodia_length = self.minFilopodiaLength
-                        max_filopodia_length = self.maxFilopodiaLength
-                    sortedArray_tmps, length,neuriteCoords_tmp = sortPoints.startSorting(neuriteCoords,[closestNeuritePoint],length,self.minBranchSize,[],keepLongBranches,self.branchLengthToKeep,distancePossible,constructNeurite,timeframeForNeurite,groupImage_branches_labeled,sumIntensitieGroupImg,groupImage,maskToExcludeFilopodia,min_filopodia_length, max_filopodia_length, self.minContrastFilopodia,self.minAllowedContrastForFindingFilopodia)
-                    for oneSortedArray in sortedArray_tmps:
-                        if len(oneSortedArray) > self.minNeuriteLength:
-                            sortedArrays.append(oneSortedArray)
-                if len(sortedArrays) == 0:
-                    return
+                                      self.maskSet, starting_threshold)
+                return
 
 
-                #if more than one start point was present, remove resulting neurites which are too similar
-                if (len(sortedArrays) > 1):
-                    sortedArrays = self.sortOutBranches(sortedArrays,sumIntensitieGroupImg)
+            # ensure that current neurite (after removing too small end branches)
+            # still is long enough
+            if (len(np.where(group_image == 1)[0]) <= self.minNeuriteLength):
+                return
 
-                if len(sortedArrays) > 0:
+            sumIntensitieGroupImg = copy.copy(self.timeframe)
 
-                    labeledGroupImage,nbOfLabels = ndimage.label(groupImage,structure=[[1,1,1],[1,1,1],[1,1,1]])
-                    #(self,allNeuritePoints,startPoint,labeledGroupImage,cX,cY,possibleOriginsColumns,allNeuritesColumns,overlappingOriginsColumns,identity,allNeurites,dilationForOverlap,overlapMultiplicator,maxChangeOfNeurite,minBranchSize,testNb,optimalThreshold,maxOverlapOfNeurites,img):s
-                    self.identity = [self.date,self.experiment,self.neuron,self.channel,timePoint]
-                    constructor = neuriteConstructor(sortedArrays,
-                                                     labeledGroupImage,
-                                                     self.cX,self.cY,
-                                                     self.possibleOriginsColumns,
-                                                     self.allNeuritesColumns,
-                                                     self.overlappingOriginsColumns,
-                                                     self.identity,
-                                                     self.allNeurites,
-                                                     self.dilationForOverlap,
-                                                     self.overlapMultiplicator,
-                                                     self.maxChangeOfNeurite,
-                                                     self.minBranchSize,
-                                                     self.testNb,
-                                                     self.optimalThreshold,
-                                                     self.maxOverlapOfNeurites,
-                                                     timeframe,
-                                                     self.toleranceForSimilarity,
-                                                     self.dilationForSmoothing,
-                                                     self.gaussianForSmoothing)
-                    self.allNeurites,self.newNeuritesDf,self.testNb = constructor.constructNeurites()
-                    #remove rows with NA values to prevent program error (can happen for < 1% cases by cross skeletonization between neurites)
-                    self.newNeuritesDf = self.newNeuritesDf.dropna()
-                    self.newNeuritesDf['length_um'] = self.newNeuritesDf['length'] * self.UMperPX
+            if len(sorted_points) == 0:
+                return
+
+            self.process_neurite(group_image, sorted_points)
+
+    def process_neurite(self, group_image, sorted_points):
+
+        labeled_group_image,nbOfLabels = ndimage.label(group_image,
+                                                     structure=self.label_structure)
+
+        #(self,allNeuritePoints,startPoint,labeledGroupImage,cX,cY,
+        # possibleOriginsColumns,allNeuritesColumns,
+        # overlappingOriginsColumns,identity,allNeurites,
+        # dilationForOverlap,overlapMultiplicator,maxChangeOfNeurite,
+        # minBranchSize,testNb,optimalThreshold,maxOverlapOfNeurites,img):s
+        self.identity = [self.date,self.experiment,self.neuron,
+                         self.channel,self.timePoint]
+        constructor = neuriteConstructor(sorted_points,
+                                         labeled_group_image,
+                                         self.cX,self.cY,
+                                         self.possibleOriginsColumns,
+                                         self.allNeuritesColumns,
+                                         self.overlappingOriginsColumns,
+                                         self.identity,
+                                         self.allNeurites,
+                                         self.dilationForOverlap,
+                                         self.overlapMultiplicator,
+                                         self.maxChangeOfNeurite,
+                                         self.minBranchSize,
+                                         self.testNb,
+                                         self.optimalThreshold,
+                                         self.maxOverlapOfNeurites,
+                                         self.timeframe,
+                                         self.toleranceForSimilarity,
+                                         self.dilationForSmoothing,
+                                         self.gaussianForSmoothing)
+        self.allNeurites,self.newNeuritesDf,self.testNb = constructor.constructNeurites()
+        #remove rows with NA values to prevent program error (can happen for < 1% cases by cross skeletonization between neurites)
+        self.newNeuritesDf = self.newNeuritesDf.dropna()
+        self.newNeuritesDf['length_um'] = self.newNeuritesDf['length'] * self.UMperPX
 
 
-                    if 'length_um' not in self.allNeurites.columns:
-                        self.allNeurites['length_um'] = self.allNeurites['length'] * self.UMperPX
+        if 'length_um' not in self.allNeurites.columns:
+            self.allNeurites['length_um'] = self.allNeurites['length'] * self.UMperPX
 
-                    #quick fix to exclude columns that were added
-                    diff_col_nb = abs(len(self.allNeurites.columns) - len(self.newNeuritesDf.columns))
-                    if diff_col_nb > 0:
-                        self.allNeurites = pd.concat([self.allNeurites.iloc[:,diff_col_nb:],self.newNeuritesDf])
-                    else:
-                        self.allNeurites = pd.concat([self.allNeurites,self.newNeuritesDf])
-
+        #quick fix to exclude columns that were added
+        diff_col_nb = abs(len(self.allNeurites.columns) - len(self.newNeuritesDf.columns))
+        if diff_col_nb > 0:
+            self.allNeurites = pd.concat([self.allNeurites.iloc[:,diff_col_nb:],self.newNeuritesDf])
+        else:
+            self.allNeurites = pd.concat([self.allNeurites,self.newNeuritesDf])
 
 
     def sortOutBranches(self,sortedArrays,sumIntensitieGroupImg):
@@ -1036,7 +1284,8 @@ class NeuriteAnalyzer():
 
 
 
-        sorted_arrays_grouped_by_start_segments = self.sort_branches_in_groups_by_start_segments(sortedArrays,self.branchLengthToKeep*2)
+        sorted_arrays_grouped_by_start_segments = self.sort_branches_in_groups_by_start_segments(sortedArrays,
+                                                                                                 self.branchLengthToKeep*2)
 
         #sort out branches with similar start segments that show too few differences
         sortedArrays = []
@@ -1151,7 +1400,6 @@ class NeuriteAnalyzer():
         return groupedSortedArrays
 
 
-
     def getLowestCurvatureBranchFromEachGroup(self,groupedSortedArrays,distToLookForCurvature,pxToJumpOverForCurvature):
         sortedArraysFromGroups = []
         #quantify curvature of each neurite
@@ -1255,8 +1503,12 @@ class NeuriteAnalyzer():
         return possibleStartPoints, finalSoma_border
 
 
-
-    def removeStartPointsOfNotPerpendicularStartingBranches(self,possibleStartPoints,groupImage,soma_border,timeframe,borderVals):
+    def removeStartPointsOfNotPerpendicularStartingBranches(self,
+                                                            possibleStartPoints,
+                                                            groupImage,
+                                                            soma_border,
+                                                            timeframe,
+                                                            borderVals):
         #go through each border-intersecting point, check which point going in direction of neurite tip moves away from soma border faster
         startPointsOfPerpendicularBranch = []
         minDistanceRatioOfStartBranch = 0.4
@@ -1300,21 +1552,25 @@ class NeuriteAnalyzer():
 
     def getStartPointsOfNeurite(self,groupImage,timeframe_soma,timeframe):
         #get start point by finding all points of groupimage that get to the soma
-        groupImage,timeframe_soma,borderVals = generalTools.crop2Images(groupImage,timeframe_soma,20)
+        (groupImage,
+         timeframe_soma,
+         borderVals) = generalTools.crop2Images(groupImage, timeframe_soma, 20)
         timeframe,borderVals = generalTools.cropImage(timeframe,borderVals)
 
         timeframe = median(timeframe,disk(4))
-        possibleStartPoints,soma_border = self.getPossibleStartPoints(groupImage,timeframe_soma)
+        possibleStartPoints,soma_border = self.getPossibleStartPoints(groupImage,
+                                                                      timeframe_soma)
 
-#        for nb in range(0,len(possibleStartPoints[0])):
-#            print(str(possibleStartPoints[0][nb]+borderVals[0])+"-"+str(possibleStartPoints[1][nb]+borderVals[2]))
-        if len(possibleStartPoints) > 1:
-            startPointsOfPerpendicularBranch = self.removeStartPointsOfNotPerpendicularStartingBranches(possibleStartPoints,groupImage,soma_border,timeframe,borderVals)
-        else:
+        if len(possibleStartPoints[0]) <= 1:
             startPointsOfPerpendicularBranch = possibleStartPoints
+            return startPointsOfPerpendicularBranch
 
+        startPointsOfPerpendicularBranch = self.removeStartPointsOfNotPerpendicularStartingBranches(possibleStartPoints,
+                                                                                                    groupImage,
+                                                                                                    soma_border,
+                                                                                                    timeframe,
+                                                                                                    borderVals)
         return startPointsOfPerpendicularBranch
-
 
 
 
@@ -1409,7 +1665,7 @@ class NeuriteAnalyzer():
 
 
     def getBranchPoints(self,groupImage,branchPointRadius,branchPointRefRadius):
-
+        groupImage = copy.copy(groupImage)
         groupData = np.where(groupImage == 1)
         groupImage, preBranchPoints = self.getPreBranchPoints(groupData,groupImage)
 

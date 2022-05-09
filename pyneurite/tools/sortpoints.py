@@ -506,14 +506,17 @@ class sortPoints():
         return decisivePoints
 
     @staticmethod
-    def appendParamsOfNearestNeighbor(distances,distance,nearestNeighbor,sortedPoints,decisivePoints):
+    def appendParamsOfNearestNeighbor(distances,distance,nearestNeighbor,
+                                      sortedPoints,decisivePoints):
         distances.append(distance)
-        decisivePoints = sortPoints.appendDecisivePoint(decisivePoints,(len(sortedPoints)-1))
+        decisivePoints = sortPoints.appendDecisivePoint(decisivePoints,
+                                                        (len(sortedPoints)-1))
         sortedPoints = np.vstack((sortedPoints,nearestNeighbor))
         return distances,  sortedPoints, decisivePoints
 
     @staticmethod
-    def getNextDecisivePointInBranchPoint(branchPointCoords,sortedPoints,decisivePoints):
+    def getNextDecisivePointInBranchPoint(branchPointCoords,sortedPoints,
+                                          decisivePoints):
             
         #get the last added decisive point which is part of the current branchpoint
         branchPointPoints = np.c_[branchPointCoords[0],branchPointCoords[1]]
@@ -521,28 +524,47 @@ class sortPoints():
         for a, decisivePoint in enumerate(decisivePoints):
             decisivePoint = sortedPoints[decisivePoint]
             for branchPointPoint in branchPointPoints:
-               if (decisivePoint[0] == branchPointPoint[0]) & (decisivePoint[1] == branchPointPoint[1]):
+               if ((decisivePoint[0] == branchPointPoint[0]) &
+                       (decisivePoint[1] == branchPointPoint[1])):
                    nextDecisivePointNb = a
                    break
         return nextDecisivePointNb
 
     @staticmethod
-    def navigateThroughBranchPoint(wrongLabels,bestFittingLabel,groupImage_branches_labeled,distances, sortedPoints, decisivePoints,branchPointCoords,firstDevisivePointIndex,foundCorrectPoint):                  
+    def navigateThroughBranchPoint(wrongLabels,bestFittingLabel,
+                                   groupImage_branches_labeled,distances,
+                                   sortedPoints, decisivePoints,
+                                   branchPointCoords,firstDevisivePointIndex,
+                                   foundCorrectPoint):
 
         #coords are only branchpoint coords
         #getneighbors -> getnearestneighbor -> if label in best: break / if label in wrong: go back
         currentPoint = sortedPoints[-1]
         
         inTransitToBestLabel = True
-        neighbors, neighbors_inclDistantSortedPoints = sortPoints.getAllNeighborsAtMaxDistance(currentPoint,branchPointCoords,sortedPoints,1.5)
+        (neighbors,
+         neighbors_inclDistantSortedPoints) = sortPoints.getAllNeighborsAtMaxDistance(currentPoint,
+                                                                                      branchPointCoords,
+                                                                                      sortedPoints,
+                                                                                      1.5)
         
         if len(neighbors) == 0:
             
-            nextDecisivePointNb = sortPoints.getNextDecisivePointInBranchPoint(branchPointCoords,sortedPoints,decisivePoints)
+            nextDecisivePointNb = sortPoints.getNextDecisivePointInBranchPoint(branchPointCoords,
+                                                                               sortedPoints,
+                                                                               decisivePoints)
             
             if not np.isnan(nextDecisivePointNb):
                 #reset to last decisive point
-                decisivePoints,distances, sortedPoints, branchPointCoords, deletedSortedPoints  = sortPoints.resetBranchPointNavigationToLastDecisivePoint(decisivePoints,nextDecisivePointNb,branchPointCoords,sortedPoints,distances)
+                (decisivePoints,
+                 distances,
+                 sortedPoints,
+                 branchPointCoords,
+                 deletedSortedPoints) = sortPoints.resetBranchPointNavigationToLastDecisivePoint(decisivePoints,
+                                                                                                 nextDecisivePointNb,
+                                                                                                 branchPointCoords,
+                                                                                                 sortedPoints,
+                                                                                                 distances)
                 currentPoint = sortedPoints[-1]
                 #if branchpoint was entered from the edge of the best label, eventually sorted points will reset to that point on the edge
                 if groupImage_branches_labeled[currentPoint[0],currentPoint[1]] == bestFittingLabel:
@@ -555,7 +577,13 @@ class sortPoints():
             #go back: go to last decisive point, delete all point until then from sorted and coords, start again
             
             distance = spatial.distance.pdist([nearestNeighbor,currentPoint])[0]
-            distances, sortedPoints, decisivePoints = sortPoints.appendParamsOfNearestNeighbor(distances,distance,nearestNeighbor,sortedPoints,decisivePoints)
+            (distances,
+             sortedPoints,
+             decisivePoints) = sortPoints.appendParamsOfNearestNeighbor(distances,
+                                                                        distance,
+                                                                        nearestNeighbor,
+                                                                        sortedPoints,
+                                                                        decisivePoints)
 #            print("current label: {}".format(groupImage_branches_labeled[nearestNeighbor[0],nearestNeighbor[1]]))
             if groupImage_branches_labeled[nearestNeighbor[0],nearestNeighbor[1]] == bestFittingLabel:
                 #if nearestneighbor is in bestFittinglabel, stop loop
@@ -564,7 +592,14 @@ class sortPoints():
                 #if in wrong label, remove wrong label point
                 #also clean distances from list!!
 
-                decisivePoints,distances, sortedPoints, branchPointCoords, deletedSortedPoints  = sortPoints.resetBranchPointNavigationToLastDecisivePoint(decisivePoints,-1,branchPointCoords,sortedPoints,distances)
+                (decisivePoints,distances,
+                 sortedPoints,
+                 branchPointCoords,
+                 deletedSortedPoints)  = sortPoints.resetBranchPointNavigationToLastDecisivePoint(decisivePoints,
+                                                                                                  -1,
+                                                                                                  branchPointCoords,
+                                                                                                  sortedPoints,
+                                                                                                  distances)
                 
         return distances, sortedPoints, decisivePoints, branchPointCoords, inTransitToBestLabel,foundCorrectPoint
 
@@ -581,7 +616,13 @@ class sortPoints():
             if decisivePoints[i] >= (firstPointToDelete-1):
                 del decisivePoints[i]
             
-        sortedPoints, branchPointCoords, deletedSortedPoints = sortPoints.deleteNeuriteCoords(branchPointCoords,firstPointToDelete,sortedPoints,saveDeletedPoints=False,deletedSortedPoints=[])
+        (sortedPoints,
+         branchPointCoords,
+         deletedSortedPoints) = sortPoints.deleteNeuriteCoords(branchPointCoords,
+                                                               firstPointToDelete,
+                                                               sortedPoints,
+                                                               saveDeletedPoints=False,
+                                                               deletedSortedPoints=[])
         return decisivePoints,distances, sortedPoints, branchPointCoords, deletedSortedPoints 
 
     @staticmethod
@@ -633,7 +674,8 @@ class sortPoints():
         
         #CROP FOR SPEED
         neuriteCoordsImg,borderVals = generalTools.cropImage(neuriteCoordsImg,[],10)
-        groupImage_branches_labeled, borderVals = generalTools.cropImage(groupImage_branches_labeled,borderVals)
+        groupImage_branches_labeled, borderVals = generalTools.cropImage(groupImage_branches_labeled,
+                                                                         borderVals)
         groupImage,borderVals = generalTools.cropImage(groupImage,borderVals)
         
         nearestNeighbor[0] = nearestNeighbor[0] - (borderVals[0])
@@ -641,14 +683,19 @@ class sortPoints():
         
         imageOfBranchPoints = np.zeros_like(groupImage_branches_labeled)
         
-        imageOfBranchPoints[(groupImage == 1) & (groupImage_branches_labeled == 0) & (neuriteCoordsImg == 1)] = 1
-        imageOfBranchPoints_labeled,nbBranchPoints = ndimage.label(imageOfBranchPoints,structure=[[1,1,1],[1,1,1],[1,1,1]])
+        imageOfBranchPoints[(groupImage == 1) &
+                            (groupImage_branches_labeled == 0) &
+                            (neuriteCoordsImg == 1)] = 1
+        imageOfBranchPoints_labeled,nbBranchPoints = ndimage.label(imageOfBranchPoints,
+                                                                   structure=[[1,1,1],[1,1,1],[1,1,1]])
         
         currentBranchPointLabel = imageOfBranchPoints_labeled[nearestNeighbor[0],nearestNeighbor[1]]
         currentBranchPointImage = np.zeros_like(groupImage_branches_labeled)
         currentBranchPointImage[imageOfBranchPoints_labeled == currentBranchPointLabel] = 1
 
-        currentBranchPointImage = sortPoints.enlargeBranchPointByOnePointEachDirection(currentBranchPointImage,nearestNeighbor,groupImage)
+        currentBranchPointImage = sortPoints.enlargeBranchPointByOnePointEachDirection(currentBranchPointImage,
+                                                                                       nearestNeighbor,
+                                                                                       groupImage)
             
         labelsAroundPoint = np.unique(groupImage_branches_labeled[currentBranchPointImage == 1])
         
@@ -676,13 +723,17 @@ class sortPoints():
 #           currentBranchPointImage[(currentBranchPointImage_dilated == 1) & (groupImage == 1) & (neuriteCoordsImg == 1)] = 1
         currentBranchPointImage_tmp[(currentBranchPointImage_dilated == 1) & (groupImage == 1)] = 1
     
-        currentBranchPointImage_labeled,nbOfIslandsInBranchPoint = ndimage.label(currentBranchPointImage_tmp,structure=[[1,1,1],[1,1,1],[1,1,1]])
-        currentBranchPointImage_tmp[currentBranchPointImage_labeled != currentBranchPointImage_labeled[nearestNeighbor[0],nearestNeighbor[1]]] = 0
+        currentBranchPointImage_labeled,nbOfIslandsInBranchPoint = ndimage.label(currentBranchPointImage_tmp,
+                                                                                 structure=[[1,1,1],[1,1,1],[1,1,1]])
+        currentBranchPointImage_tmp[currentBranchPointImage_labeled != currentBranchPointImage_labeled[nearestNeighbor[0],
+                                                                                                       nearestNeighbor[1]]] = 0
 
         #get area of current branchpoint that was added by dilation        
         currentBranchPointImage_addedArea = np.zeros_like(currentBranchPointImage)
-        currentBranchPointImage_addedArea[(currentBranchPointImage == 0) & (currentBranchPointImage_tmp == 1)] = 1
-        currentBranchPointImage_addedArea_labeled,nbLabels = ndimage.label(currentBranchPointImage_addedArea,structure=[[1,1,1],[1,1,1],[1,1,1]])
+        currentBranchPointImage_addedArea[(currentBranchPointImage == 0) &
+                                          (currentBranchPointImage_tmp == 1)] = 1
+        currentBranchPointImage_addedArea_labeled,nbLabels = ndimage.label(currentBranchPointImage_addedArea,
+                                                                           structure=[[1,1,1],[1,1,1],[1,1,1]])
         
         currentBranchPointImage_final = copy.copy(currentBranchPointImage)
         
@@ -711,7 +762,8 @@ class sortPoints():
             if a > len(sortedPoints):
                 break
             else:
-                startingLabel = groupImage_branches_labeled[sortedPoints[-a][0],sortedPoints[-a][1]]
+                startingLabel = groupImage_branches_labeled[sortedPoints[-a][0],
+                                                            sortedPoints[-a][1]]
                 if startingLabel != 0:
                     nbOfConsecutiveLabels += 1
                     if nbOfConsecutiveLabels > 1:
@@ -721,7 +773,8 @@ class sortPoints():
         else:
             start = 20
         lastSortedPoints_coords = np.transpose(sortedPoints[-start:-1])
-        startingLabelIntensity = np.median(sumIntensitieGroupImg[lastSortedPoints_coords[0],lastSortedPoints_coords[1]])
+        startingLabelIntensity = np.median(sumIntensitieGroupImg[lastSortedPoints_coords[0],
+                                                                 lastSortedPoints_coords[1]])
         
         startingLabelImage = np.zeros_like(groupImage_branches_labeled)
         startingLabelImage[groupImage_branches_labeled == startingLabel] = 1
@@ -765,7 +818,8 @@ class sortPoints():
 
 
     @staticmethod
-    def enlargeBranch(branchImage,branchPointImage,neuriteCoordsImage,intensityImage,minSize,pointSource=False):
+    def enlargeBranch(branchImage,branchPointImage,neuriteCoordsImage,
+                      intensityImage,minSize,pointSource=False):
         #if startingLabel length is < 20, increase size by enlarging it backwards
         lengthOfBranch = len(np.where(branchImage == 1)[0])
         if lengthOfBranch < minSize:
@@ -800,7 +854,8 @@ class sortPoints():
                 lowestIntensityDifference = np.nan
                 for a in range(0,len(branchImageDifference_coords[0])):
                     pointIsBest = False 
-                    intensityDifference= abs(intensityImage[branchImageDifference_coords[0][a],branchImageDifference_coords[1][a]]-averageBranchIntensity)
+                    intensityDifference= abs(intensityImage[branchImageDifference_coords[0][a],
+                                                            branchImageDifference_coords[1][a]]-averageBranchIntensity)
                     if np.isnan(lowestIntensityDifference):
                         pointIsBest = True
                     elif intensityDifference < lowestIntensityDifference:
@@ -818,7 +873,11 @@ class sortPoints():
 
 
     @staticmethod
-    def getLongestBranch(deletedSortedPoints,constructNeurite,minFilopodiaLength,maxFilopodiaLength,minContrastFilopodia,minAllowedContrast,img,filterSizeSmoothing,branchLengthToKeep,groupImage_branches_labeled,branches_image):
+    def getLongestBranch(deletedSortedPoints,constructNeurite,
+                         minFilopodiaLength,maxFilopodiaLength,
+                         minContrastFilopodia,minAllowedContrast,
+                         img,filterSizeSmoothing,branchLengthToKeep,
+                         groupImage_branches_labeled,branches_image):
         #if already deleted points are more than new points after fallback, delete new points, add old poinds again
         longestBranchSize = 0
         longestBranch = []
@@ -841,7 +900,14 @@ class sortPoints():
             #if neurite is constructed, check if tip of neurite needs to be removed due to low contrast (filopodia like)
             if constructNeurite:
                 
-                oneBranch = sortPoints.removeFilopodia(oneBranch,minFilopodiaLength,maxFilopodiaLength,minContrastFilopodia,minAllowedContrast,copy.copy(img),groupImage_branches_labeled,branches_image)
+                oneBranch = sortPoints.removeFilopodia(oneBranch,
+                                                       minFilopodiaLength,
+                                                       maxFilopodiaLength,
+                                                       minContrastFilopodia,
+                                                       minAllowedContrast,
+                                                       copy.copy(img),
+                                                       groupImage_branches_labeled,
+                                                       branches_image)
                 
                 #remove wrong start points
 #                oneBranch = sortPoints.removeFilopodia(oneBranch,-minFilopodiaLength,-maxFilopodiaLength,minContrastFilopodia,minAllowedContrast,copy.copy(img),maskToExcludeFilopodia,15)
@@ -862,7 +928,10 @@ class sortPoints():
         
 
     @staticmethod
-    def removeFilopodia(oneBranch,minFilopodiaLength,maxFilopodiaLength,minContrastFilopodia,minAllowedContrast,img,groupImage_branches_labeled,branches_image,additionalNbOfPxToDelete=0):
+    def removeFilopodia(oneBranch,minFilopodiaLength,maxFilopodiaLength,
+                        minContrastFilopodia,minAllowedContrast,img,
+                        groupImage_branches_labeled,branches_image,
+                        additionalNbOfPxToDelete=0):
         
         oneBranch_tmp = copy.copy(oneBranch)
         start = minFilopodiaLength

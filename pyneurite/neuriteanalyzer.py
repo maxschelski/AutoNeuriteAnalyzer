@@ -147,6 +147,11 @@ class NeuriteAnalyzer():
 
         self.max_nb_of_branchpoints_before_overload = 100
 
+        # radius of disk for opening image before skeletonization
+        # to remove artificial branches in skeleton which are just due to
+        # small bumps in the thresholded image
+        self.open_for_skeletonization = 2
+
 
         #---------------------NEURITE CONSTRUCTOR-------------------------
         #set max growth & retraction of a neurite (in px)
@@ -257,14 +262,11 @@ class NeuriteAnalyzer():
         #minimum fraction of all start points which need to be in radius above of currently looked at start point to be choosen
         self.min_fraction_of_start_points_closeby = 0.2
 
-
         #---------------------ANALYZERS-------------------------
         #minimum length of whole neurite before not considered
         self.minNeuriteLength = 40
 
         self.AW_maxIntFac = 2
-
-
 
         #---------------------INITIATE PARAMETERS-------------------------
         #x and y coordinates of mid point of soma
@@ -281,6 +283,8 @@ class NeuriteAnalyzer():
         self.backgroundVal = np.nan
 
     def convertAllConstants(self):
+
+        self.open_for_skeletonization = self.convert(self.open_for_skeletonization)
 
         self.radius_of_start_points = self.convert(self.radius_of_start_points)
         self.distToLookForCurvature = self.convert(self.distToLookForCurvature)
@@ -886,37 +890,17 @@ class NeuriteAnalyzer():
 
         return True, ""
 
-    def get_neurite_skeletons(self):
+    def get_long_skeleton_to_keep(self, initial_skeleton, image_opened,
+                                  skeleton_opened_image):
         """
-        Create skeleton of neurites from clean thresholded image.
-        Prevent skeletons to form in thick sections to small uneven
-        parts of the neurite, open the neurite image to smoothen it
-        However, opening the images might lead to loss of parts of neurites
-        (either complete branches or a significant portion at the tip),
-        it might also separate a neurite into two parts of which only one is
-        connected to the soma, therefore the not connected part would
-        be removed
-        Re-connect the correct neurites by three different ways:
-        1) Reconnect ALL skeletons outside of the opened image;
-        2) Connect tips of skeleton, if they are not branches which are only
-            present in the initial skeleton (and no part of them present in
-            skeleton of opened image)
-        3) At the end check for each lost part of the skeleton whether
-            adding it will connect some parts of the skeleton. If so, keep it.
+        1) Reconnect all skeletons outside of the opened image
+         always keep parts of overhang larger than min branch size!
         """
-        initial_skeleton = morph.skeletonize(self.timeframe_neurites)
-
-        image_opened = morph.binary_opening(self.timeframe_neurites,
-                                            disk(2))
-
-        skeleton_opened_image = morph.skeletonize(image_opened)
         # create new image with
         # old skeleton which goes beyond opened thresholded image
         skeleton_overhang = copy.copy(initial_skeleton)
         skeleton_overhang[image_opened == True] = False
 
-        # 1) Reconnect all skeletons outside of the opened image
-        # always keep parts of overhang larger than min branch size!
         skeletons_overhang_keep = copy.copy(skeleton_overhang)
 
         #create image with all overhangs longer than minbranhsize
@@ -940,9 +924,14 @@ class NeuriteAnalyzer():
         for label in labels_of_overhangs_to_keep:
             connected_overhangs_to_keep[overhang_connected_labeled == label] = True
 
+        return connected_overhangs_to_keep
+
+    def get_lost_branch_tips_of_skeleton(self, initial_skeleton,
+                                         skeleton_opened_image):
+        """
         # 2) Connect tips of skeleton, if they are not branches which are just
         #    present in the initial skeleton
-
+        """
         # find tips by getting the difference of the initial skeleton
         # and the skeleton of the opened image
         skeleton_difference = initial_skeleton & np.invert(skeleton_opened_image)
@@ -981,14 +970,19 @@ class NeuriteAnalyzer():
                                 if label_to_add != 0 ]
                 skeleton_tips[skeleton_difference_labeled == label_to_add[0]] = True
 
-        skeleton = copy.copy(skeleton_opened_image)
-        skeleton[skeleton_tips] = 1
-        skeleton[connected_overhangs_to_keep] = 1
+        return skeleton_tips
 
-        #3) At the end check for each lost part of the skeleton whether
-        #    adding it will connect some parts of the skeleton. If so, keep it.
+
+    def get_skeleton_connections(self, skeleton, initial_skeleton,
+                                 skeleton_opened_image):
+        """
+        3) At the end check for each lost part of the skeleton whether
+            adding it will connect some parts of the skeleton. If so, keep it.
+        """
         # now go through each connector and test whether adding it reduces
         # the number of labels
+        possible_connectors = copy.copy(initial_skeleton)
+        possible_connectors[skeleton_opened_image] = False
         skeleton_connected = copy.copy(skeleton)
         connectors_labeled, _ = ndimage.label(possible_connectors,
                                               structure = self.label_structure)
@@ -1008,7 +1002,52 @@ class NeuriteAnalyzer():
                 current_nb_labels = new_nb_labels
                 # and accept changes to the connected skeleton
                 skeleton_connected = skeleton_connected_test
+        return skeleton_connected
 
+
+    def get_neurite_skeletons(self):
+        """
+        Create skeleton of neurites from clean thresholded image.
+        Prevent skeletons to form in thick sections to small uneven
+        parts of the neurite, open the neurite image to smoothen it
+        However, opening the images might lead to loss of parts of neurites
+        (either complete branches or a significant portion at the tip),
+        it might also separate a neurite into two parts of which only one is
+        connected to the soma, therefore the not connected part would
+        be removed
+        Re-connect the correct neurites by three different ways:
+        1) Reconnect ALL skeletons outside of the opened image;
+        2) Connect tips of skeleton, if they are not branches which are only
+            present in the initial skeleton (and no part of them present in
+            skeleton of opened image)
+        3) At the end check for each lost part of the skeleton whether
+            adding it will connect some parts of the skeleton. If so, keep it.
+        """
+        initial_skeleton = morph.skeletonize(self.timeframe_neurites)
+
+        # Open image to smoothen it and thereby to remove artifial branches
+        # created from small bumps in thresholded image
+        image_opened = morph.binary_opening(self.timeframe_neurites,
+                                            disk(self.open_for_skeletonization))
+
+        skeleton_opened_image = morph.skeletonize(image_opened)
+
+        connected_overhangs_to_keep = self.get_long_skeleton_to_keep(initial_skeleton,
+                                                                     image_opened,
+                                                                     skeleton_opened_image)
+
+        skeleton_tips = self.get_lost_branch_tips_of_skeleton(initial_skeleton,
+                                                              skeleton_opened_image)
+
+        skeleton = copy.copy(skeleton_opened_image)
+        skeleton[skeleton_tips] = 1
+        skeleton[connected_overhangs_to_keep] = 1
+
+        skeleton_connected = self.get_skeleton_connections(skeleton,
+                                                           initial_skeleton,
+                                                           skeleton_opened_image)
+
+        self.timeframe_neurites = skeleton_connected
         self.timeframe_neurites[self.timeframe_soma == True] = False
 
     def processTimePoint(self, imagePath, timePoint, maskImData_thresh,

@@ -887,8 +887,129 @@ class NeuriteAnalyzer():
         return True, ""
 
     def get_neurite_skeletons(self):
-        self.timeframe_neurites = morph.skeletonize(self.timeframe_neurites)
-        self.timeframe_neurites[self.timeframe_soma == True] = False;
+        """
+        Create skeleton of neurites from clean thresholded image.
+        Prevent skeletons to form in thick sections to small uneven
+        parts of the neurite, open the neurite image to smoothen it
+        However, opening the images might lead to loss of parts of neurites
+        (either complete branches or a significant portion at the tip),
+        it might also separate a neurite into two parts of which only one is
+        connected to the soma, therefore the not connected part would
+        be removed
+        Re-connect the correct neurites by three different ways:
+        1) Reconnect ALL skeletons outside of the opened image;
+        2) Connect tips of skeleton, if they are not branches which are only
+            present in the initial skeleton (and no part of them present in
+            skeleton of opened image)
+        3) At the end check for each lost part of the skeleton whether
+            adding it will connect some parts of the skeleton. If so, keep it.
+        """
+        initial_skeleton = morph.skeletonize(self.timeframe_neurites)
+
+        image_opened = morph.binary_opening(self.timeframe_neurites,
+                                            disk(2))
+
+        skeleton_opened_image = morph.skeletonize(image_opened)
+        # create new image with
+        # old skeleton which goes beyond opened thresholded image
+        skeleton_overhang = copy.copy(initial_skeleton)
+        skeleton_overhang[image_opened == True] = False
+
+        # 1) Reconnect all skeletons outside of the opened image
+        # always keep parts of overhang larger than min branch size!
+        skeletons_overhang_keep = copy.copy(skeleton_overhang)
+
+        #create image with all overhangs longer than minbranhsize
+        skeletons_overhang_keep = morph.remove_small_objects(skeletons_overhang_keep,
+                                                             self.minBranchSize,
+                                                             connectivity=2)
+
+        # add all possible connectors to overhangs to keep
+        skeletons_overhang_keep_connected = copy.copy(skeletons_overhang_keep)
+        # possible connectors are the parts of the skeleton that were removed
+        # in the skeleton of the opened thresholded image
+        possible_connectors = copy.copy(initial_skeleton)
+        possible_connectors[skeleton_opened_image] = False
+        skeletons_overhang_keep_connected[possible_connectors] = True
+        # only keep labels of the connector which are part of the
+        # overhang to keep (before adding connectors)
+        overhang_connected_labeled, _ = ndimage.label(skeletons_overhang_keep_connected,
+                                                      structure=self.label_structure)
+        labels_of_overhangs_to_keep = np.unique(overhang_connected_labeled[skeletons_overhang_keep])
+        connected_overhangs_to_keep = np.zeros_like(skeleton_opened_image)
+        for label in labels_of_overhangs_to_keep:
+            connected_overhangs_to_keep[overhang_connected_labeled == label] = True
+
+        # 2) Connect tips of skeleton, if they are not branches which are just
+        #    present in the initial skeleton
+
+        # find tips by getting the difference of the initial skeleton
+        # and the skeleton of the opened image
+        skeleton_difference = initial_skeleton & np.invert(skeleton_opened_image)
+        skeleton_difference_labeled, _ = ndimage.label(skeleton_difference,
+                                                       structure=self.label_structure)
+        # It will include some elongation of tips
+        # and also some added branches
+        # To find all branches,
+        # the difference of the skeletons is dilated by 1 px
+        skeleton_difference_dil = morph.binary_dilation(skeleton_difference,
+                                                        [[1,1,1],
+                                                         [1,1,1],
+                                                         [1,1,1]])
+        # and then remove each single part from the initial skeleton
+        skeleton_difference_dil_labeled, _ = ndimage.label(skeleton_difference_dil,
+                                                    structure=self.label_structure)
+        difference_labels = np.unique(skeleton_difference_dil_labeled)
+        _, initial_nb_labels = ndimage.label(initial_skeleton,
+                                              structure=self.label_structure)
+        skeleton_tips = np.zeros_like(initial_skeleton)
+        for label in difference_labels:
+            initial_skeleton_test = copy.copy(initial_skeleton)
+            initial_skeleton_test[skeleton_difference_dil_labeled == label] = False
+            _, new_nb_labels = ndimage.label(initial_skeleton_test,
+                                             structure=self.label_structure)
+            # if this leads to more labeled regions, then it was a branch
+            # (since there was no distance between the main part and the part
+            # removed from it)
+            # only add skeleton parts where this was not the case
+            if new_nb_labels == initial_nb_labels:
+                # do not add the dilated part but the undilated part
+                # first find labels of undilated part to add, then add that
+                labels_to_add = np.unique(skeleton_difference_labeled[skeleton_difference_dil_labeled == label])
+                label_to_add = [label_to_add
+                                for label_to_add in labels_to_add
+                                if label_to_add != 0 ]
+                skeleton_tips[skeleton_difference_labeled == label_to_add[0]] = True
+
+        skeleton = copy.copy(skeleton_opened_image)
+        skeleton[skeleton_tips] = 1
+        skeleton[connected_overhangs_to_keep] = 1
+
+        #3) At the end check for each lost part of the skeleton whether
+        #    adding it will connect some parts of the skeleton. If so, keep it.
+        # now go through each connector and test whether adding it reduces
+        # the number of labels
+        skeleton_connected = copy.copy(skeleton)
+        connectors_labeled, _ = ndimage.label(possible_connectors,
+                                              structure = self.label_structure)
+        connector_labels = np.unique(connectors_labeled)
+        _, current_nb_labels = ndimage.label(skeleton,
+                                             structure = self.label_structure)
+        for label in connector_labels:
+            if label == 0:
+                continue
+            skeleton_connected_test = copy.copy(skeleton_connected)
+            skeleton_connected_test[connectors_labeled == label] = True
+            _, new_nb_labels = ndimage.label(skeleton_connected_test,
+                                             structure=self.label_structure)
+            if new_nb_labels < current_nb_labels:
+                # if the nb of labels was reduced,
+                # set the new nb of labels as the current number of labels
+                current_nb_labels = new_nb_labels
+                # and accept changes to the connected skeleton
+                skeleton_connected = skeleton_connected_test
+
+        self.timeframe_neurites[self.timeframe_soma == True] = False
 
     def processTimePoint(self, imagePath, timePoint, maskImData_thresh,
                          maskSet, starting_threshold= 0):

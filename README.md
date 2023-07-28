@@ -1,7 +1,7 @@
 # pyNeurite
 A computer vision package that traces and analyzes neurites fully automated. Optimized for time-lapse videos.
 
-Used in Schelski and Bradke 2021
+Used in Schelski and Bradke, 2022, Science Advances (https://www.science.org/doi/10.1126/sciadv.abo2336)
 
 # Installation
 

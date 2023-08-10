@@ -1292,7 +1292,7 @@ class NeuriteAnalyzer():
                 max_filopodia_length = self.maxFilopodiaLength
 
             (sortedArray_tmps,
-             length, _) = sortPoints.startSorting(neuriteCoords,
+             length, _, _) = sortPoints.startSorting(neuriteCoords,
                                                          [closestNeuritePoint],
                                                          length,
                                                          self.minBranchSize,
@@ -1784,7 +1784,9 @@ class NeuriteAnalyzer():
                         pointCoords = np.where(pointImage == 1)
                         startpointForSorting = generalTools.getFurthestPoint(pointCoords,[point])
                         #    def startSorting(neuriteCoords, sortedPoints, length,minBranchSize,decisivePoints = [], keepLongBranches = False
-                        sortedPoints, length,neuriteCoords = sortPoints.startSorting(pointCoords,[startpointForSorting],0,self.minBranchSize,[],True)
+                        (sortedPoints, length,_,
+                         neuriteCoords) = sortPoints.startSorting(pointCoords,
+                                                                  [startpointForSorting],0,self.minBranchSize,[],True)
                         sortedCoords = np.transpose(sortedPoints)
                         pointIndex = np.where((sortedCoords[0] == point[0]) & (sortedCoords[1] == point[1]))[0]
                         if len(pointIndex) > 0:

@@ -20,8 +20,6 @@ from matplotlib import pyplot as plt
 from skimage.draw import line
 
 
-
-
 class neuriteConstructor():
     
     
@@ -96,7 +94,7 @@ class neuriteConstructor():
             keepLongBranches = False
 
             (self.sortedPoints,
-             length,
+             length,_,
              neuriteCoords_tmp) = sortPoints.startSorting(self.allCoords,
                                                           [startPoint],0,
                                                           self.minBranchSize,
@@ -910,7 +908,7 @@ class neuriteConstructor():
         coords = np.where(image == 1)
         closest_point = generalTools.getClosestPoint(coords,[[ref_coords[0][0],
                                                               ref_coords[1][0]]])
-        sorted_points, length, new_coords = sortPoints.startSorting(coords,
+        sorted_points, length,_, new_coords = sortPoints.startSorting(coords,
                                                                     [closest_point],
                                                                     0,minBranchSize)
         sorted_points = generalTools.convert_points_to_point_list(sorted_points)

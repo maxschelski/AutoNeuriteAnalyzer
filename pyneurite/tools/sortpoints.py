@@ -54,11 +54,13 @@ class sortPoints():
         
         deletedSortedPoints =[]
         loop_points = []
+        lengths = np.array([0])
         bestFittingLabel = 0
         perm_deleted_points = []
         while continueSorting:
             (sortedPoints,
              length,
+             lengths,
              neuriteCoords,
              deletedSortedPoints,
              navigateThroughBestLabel,
@@ -69,6 +71,7 @@ class sortPoints():
              perm_deleted_points) = sortPoints.sortNextPoint(neuriteCoords,
                                                              sortedPoints,
                                                              length,
+                                                             lengths,
                                                              navigateThroughBestLabel,
                                                              decisivePoints,
                                                              deletedSortedPoints,
@@ -99,7 +102,7 @@ class sortPoints():
                                                                        groupImage_branches_labeled,
                                                                        branches_image)
                 
-        return sortedPoints, length,neuriteCoords
+        return sortedPoints, length, lengths, neuriteCoords
     
     
     @staticmethod
@@ -148,7 +151,7 @@ class sortPoints():
     
     
     @staticmethod
-    def sortNextPoint(neuriteCoords,sortedPoints, length,
+    def sortNextPoint(neuriteCoords,sortedPoints, length, lengths,
                       navigateThroughBestLabel,decisivePoints,
                       deletedSortedPoints,distancePossible,constructNeurite,
                       img,groupImage_branches_labeled,sumIntensitieGroupImg,
@@ -187,17 +190,21 @@ class sortPoints():
             if isDecisivePoint:
                 for a in range(0,len(distance)):
                     length += distance[a]
+                    lengths = np.hstack((lengths, length))
             else:
                 sortedPoints = np.vstack((sortedPoints,nearestNeighbor))
                 length += distance
-            return (sortedPoints, length,neuriteCoords,deletedSortedPoints,
+                lengths = np.hstack((lengths, length))
+            return (sortedPoints, length, lengths, neuriteCoords,
+                    deletedSortedPoints,
                     navigateThroughBestLabel, decisivePoints, bestFittingLabel,
                     continueSorting,loop_points,perm_deleted_points)
 
         # go on to constructing neurite when no decisive points are left
         if (len(decisivePoints) <= 0):
             continueSorting = False
-            return (sortedPoints, length,neuriteCoords,deletedSortedPoints,
+            return (sortedPoints, length, lengths, neuriteCoords,
+                    deletedSortedPoints,
                     navigateThroughBestLabel, decisivePoints, bestFittingLabel,
                     continueSorting,loop_points,perm_deleted_points)
 
@@ -221,12 +228,13 @@ class sortPoints():
 
         (sortedPoints,
          neuriteCoords,
-         deletedSortedPoints) = sortPoints.deleteNeuriteCoords(neuriteCoords,
+         deletedSortedPoints,
+         lengths) = sortPoints.deleteNeuriteCoords(neuriteCoords,
                                                                decisivePoints[-1]+1,
                                                                sortedPoints,
                                                                saveDeletedPoints,
                                                                deletedSortedPoints,
-                                                               constructNeurite)
+                                                   lengths=lengths)
         #add new points to permanently deleted points array (so that they are never added again to neuritecoords)
         if reset_after_loop:
             new_neurite_points = np.transpose(neuriteCoords)
@@ -238,7 +246,7 @@ class sortPoints():
 #                        print("after - neurite coords: {} - deleted: {}".format(len(neuriteCoords[0]),len(deletedSortedPoints)))
         del decisivePoints[-1]
 
-        return (sortedPoints, length,neuriteCoords,deletedSortedPoints,
+        return (sortedPoints, length, lengths, neuriteCoords,deletedSortedPoints,
                 navigateThroughBestLabel, decisivePoints, bestFittingLabel,
                 continueSorting,loop_points,perm_deleted_points)
 
@@ -431,9 +439,9 @@ class sortPoints():
 
                 (sortedPoints,
                  neuriteCoords,
-                 deletedSortedPoints) = sortPoints.deleteNeuriteCoords(neuriteCoords,
-                                                                       decisivePoints[-1]+1,
-                                                                       sortedPoints,False,[])
+                 _, _) = sortPoints.deleteNeuriteCoords(neuriteCoords,
+                                                        decisivePoints[-1]+1,
+                                                        sortedPoints,False,[])
                 del decisivePoints[-1]
 
             return (nearestNeighbor, distance, decisivePoints, isDecisivePoint,
@@ -618,12 +626,13 @@ class sortPoints():
             
         (sortedPoints,
          branchPointCoords,
-         deletedSortedPoints) = sortPoints.deleteNeuriteCoords(branchPointCoords,
-                                                               firstPointToDelete,
-                                                               sortedPoints,
-                                                               saveDeletedPoints=False,
-                                                               deletedSortedPoints=[])
-        return decisivePoints,distances, sortedPoints, branchPointCoords, deletedSortedPoints 
+         deletedSortedPoints,
+         _) = sortPoints.deleteNeuriteCoords(branchPointCoords,
+                                             firstPointToDelete, sortedPoints,
+                                             saveDeletedPoints=False,
+                                             deletedSortedPoints=[])
+        return (decisivePoints,distances, sortedPoints, branchPointCoords,
+                deletedSortedPoints)
 
     @staticmethod
     def getNearestNeighbor(neighbors,constructNeurite,sortedPoints,lowestDistance=10,navigateThroughBestLabel=False,bestFittingLabel=0,groupImage_branches_labeled=[]):
@@ -1177,7 +1186,9 @@ class sortPoints():
                         
 
     @staticmethod
-    def deleteNeuriteCoords(allCoords,firstPointToDelete,sortedPoints,saveDeletedPoints,deletedSortedPoints,constructNeurite=False):
+    def deleteNeuriteCoords(allCoords,firstPointToDelete,sortedPoints,
+                            saveDeletedPoints,deletedSortedPoints,
+                            lengths=[],constructNeurite=False):
         #delete all points in sortedPoints from firstPoint on, delete same points in allCoords
         nbsToDelete = range(firstPointToDelete,len(sortedPoints))
         for a in nbsToDelete:
@@ -1203,5 +1214,7 @@ class sortPoints():
             if not all_points_present:
                 deletedSortedPoints.append(sortedPoints)
         sortedPoints = np.delete(sortedPoints,nbsToDelete,axis=0)
-        return sortedPoints, allCoords, deletedSortedPoints
+        if len(lengths) > 0:
+            lengths = np.delete(lengths, nbsToDelete, axis=0)
+        return sortedPoints, allCoords, deletedSortedPoints, lengths
         

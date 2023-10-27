@@ -15,6 +15,8 @@ The package was developed and tested on Windows.
 > cd pyneurite
 5. Create environment for pyneurite with Anaconda:
 > conda env create -f environment.yml
+6. Activate environment in Anaconda:
+> conda activate pyneurite
 6. Install pyneurite locally using pip:
 > pip install -e .
 
